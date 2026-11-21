@@ -21,6 +21,7 @@ import {
   Radio,
   Flame,
   Volume2,
+  Search,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
@@ -90,124 +91,157 @@ export default function HeroSection() {
   };
 
   return (
-    <div className="relative pt-32 pb-24 px-4 md:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
+    <div className="relative pt-20 md:pt-32 pb-24 px-4 md:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
       
-      {/* Dynamic Glowing Pill Badge */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6 glass-pill"
-        style={{
-          borderColor: `${config.accentColor}40`,
-          color: config.accentColor,
-        }}
-      >
-        <Car className="w-3.5 h-3.5" />
-        <span>Late-Night Scenic Jungle Drive & Ambient Audio Experience</span>
-      </motion.div>
-
-      {/* Main Hero Title */}
-      <motion.h1
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.1 }}
-        className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white max-w-5xl leading-[1.12]"
-      >
-        Soundscapes for <br />
-        <span
-          className="bg-clip-text text-transparent transition-all duration-700"
-          style={{
-            backgroundImage: `linear-gradient(135deg, #ffffff 25%, ${config.accentColor} 100%)`,
-          }}
-        >
-          Midnight Drives & Serenity
-        </span>
-      </motion.h1>
-
-      {/* Subtitle */}
-      <motion.p
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.2 }}
-        className="mt-6 text-base sm:text-lg text-slate-300 max-w-2xl font-normal leading-relaxed"
-      >
-        Cruise through a vast misty jungle as living headlights illuminate your path, or sink into calming rain and sunset hues. Search and stream **any song in the world** with live rhythmic equalizer bars.
-      </motion.p>
-
-      {/* Real-time Equalizer Audio Preview Bar */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.7, delay: 0.25 }}
-        className="mt-8 p-3 rounded-2xl glass-panel inline-flex items-center gap-3.5 border border-white/10 shadow-xl"
-      >
-        <button
-          onClick={togglePlay}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95 shadow-md"
-          style={{ backgroundColor: config.accentColor }}
-          title={isPlaying ? 'Pause music' : 'Start music'}
-        >
-          {isPlaying ? (
-            <Pause className="w-4 h-4 fill-white" />
-          ) : (
-            <Play className="w-4 h-4 fill-white ml-0.5" />
-          )}
-        </button>
-
-        <div className="flex flex-col text-left">
-          <span className="text-xs font-semibold text-white">
-            {currentTrack?.title || 'Ambient Frequency Spectrum'}
-          </span>
-          <span className="text-[10px] text-slate-400">
-            {isPlaying ? 'Live 60 FPS audio-reactive waves' : 'Click to feel the rhythm'}
-          </span>
-        </div>
-
-        <div className="pl-3 border-l border-white/10">
-          <AudioVisualizerBars barCount={16} height={28} />
-        </div>
-      </motion.div>
-
-      {/* Action Buttons */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.3 }}
-        className="mt-8 flex flex-wrap items-center justify-center gap-4"
-      >
+      {/* ------------------------------------------------------------- */}
+      {/* MOBILE FULL-SCREEN DRIVE HUD (md:hidden) - Zero Windshield Clutter */}
+      {/* ------------------------------------------------------------- */}
+      <div className="w-full max-w-sm mx-auto flex flex-col items-center gap-3 mb-6 md:hidden">
+        {/* Sleek Direct Search Bar Trigger */}
         <Link
           href="/search"
-          className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl font-medium text-white shadow-lg transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
-          style={{
-            backgroundColor: config.accentColor,
-            boxShadow: `0 10px 25px -5px ${config.accentColor}60`,
-          }}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-2xl glass-panel border border-white/20 text-slate-200 text-xs shadow-2xl backdrop-blur-2xl transition-all active:scale-98"
         >
-          <Play className="w-4 h-4 fill-white" />
-          <span>Search & Play Any Song</span>
+          <span className="flex items-center gap-2.5">
+            <Search className="w-4 h-4 text-emerald-400" />
+            <span className="text-slate-300 font-medium">Search ANY song or artist...</span>
+          </span>
+          <span
+            className="text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold uppercase"
+            style={{ backgroundColor: `${config.accentColor}30`, color: config.accentColor }}
+          >
+            Play
+          </span>
         </Link>
 
-        {/* Start Scenic Jungle Drive Action */}
-        <button
-          onClick={() => {
-            setMood('drive');
-            if (!isPlaying) togglePlay();
-          }}
-          className="flex items-center gap-2 px-6 py-3.5 rounded-2xl font-medium text-slate-200 glass-pill hover:text-white transition-all"
-        >
-          <Car className="w-4 h-4 text-emerald-400" />
-          <span>Start Scenic Jungle Drive</span>
-        </button>
+        {/* Ambient Atmosphere Status */}
+        <div className="flex items-center gap-2 text-[11px] text-slate-300 font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>Atmosphere: <strong className="capitalize text-white">{mood}</strong></span>
+        </div>
+      </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-6 py-3.5 rounded-2xl font-medium text-slate-300 glass-pill hover:text-white transition-all"
+      {/* ------------------------------------------------------------- */}
+      {/* DESKTOP HERO SECTION (hidden md:flex)                          */}
+      {/* ------------------------------------------------------------- */}
+      <div className="hidden md:flex flex-col items-center text-center w-full">
+        {/* Dynamic Glowing Pill Badge */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6 glass-pill"
+          style={{
+            borderColor: `${config.accentColor}40`,
+            color: config.accentColor,
+          }}
         >
-          <Radio className="w-4 h-4" />
-          <span>Stream Audio from Anywhere</span>
-        </button>
-      </motion.div>
+          <Car className="w-3.5 h-3.5" />
+          <span>Late-Night Scenic Jungle Drive & Ambient Audio Experience</span>
+        </motion.div>
+
+        {/* Main Hero Title */}
+        <motion.h1
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.1 }}
+          className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white max-w-5xl leading-[1.12]"
+        >
+          Soundscapes for <br />
+          <span
+            className="bg-clip-text text-transparent transition-all duration-700"
+            style={{
+              backgroundImage: `linear-gradient(135deg, #ffffff 25%, ${config.accentColor} 100%)`,
+            }}
+          >
+            Midnight Drives & Serenity
+          </span>
+        </motion.h1>
+
+        {/* Subtitle */}
+        <motion.p
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.2 }}
+          className="mt-6 text-base sm:text-lg text-slate-300 max-w-2xl font-normal leading-relaxed"
+        >
+          Cruise through a vast misty jungle as living headlights illuminate your path, or sink into calming rain and sunset hues. Search and stream **any song in the world** with live rhythmic equalizer bars.
+        </motion.p>
+
+        {/* Real-time Equalizer Audio Preview Bar */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.7, delay: 0.25 }}
+          className="mt-8 p-3 rounded-2xl glass-panel inline-flex items-center gap-3.5 border border-white/10 shadow-xl"
+        >
+          <button
+            onClick={togglePlay}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95 shadow-md"
+            style={{ backgroundColor: config.accentColor }}
+            title={isPlaying ? 'Pause music' : 'Start music'}
+          >
+            {isPlaying ? (
+              <Pause className="w-4 h-4 fill-white" />
+            ) : (
+              <Play className="w-4 h-4 fill-white ml-0.5" />
+            )}
+          </button>
+
+          <div className="flex flex-col text-left">
+            <span className="text-xs font-semibold text-white">
+              {currentTrack?.title || 'Ambient Frequency Spectrum'}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              {isPlaying ? 'Live 60 FPS audio-reactive waves' : 'Click to feel the rhythm'}
+            </span>
+          </div>
+
+          <div className="pl-3 border-l border-white/10">
+            <AudioVisualizerBars barCount={16} height={28} />
+          </div>
+        </motion.div>
+
+        {/* Action Buttons */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.3 }}
+          className="mt-8 flex flex-wrap items-center justify-center gap-4"
+        >
+          <Link
+            href="/search"
+            className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl font-medium text-white shadow-lg transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            style={{
+              backgroundColor: config.accentColor,
+              boxShadow: `0 10px 25px -5px ${config.accentColor}60`,
+            }}
+          >
+            <Play className="w-4 h-4 fill-white" />
+            <span>Search & Play Any Song</span>
+          </Link>
+
+          {/* Start Scenic Jungle Drive Action */}
+          <button
+            onClick={() => {
+              setMood('drive');
+              if (!isPlaying) togglePlay();
+            }}
+            className="flex items-center gap-2 px-6 py-3.5 rounded-2xl font-medium text-slate-200 glass-pill hover:text-white transition-all"
+          >
+            <Car className="w-4 h-4 text-emerald-400" />
+            <span>Start Scenic Jungle Drive</span>
+          </button>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-6 py-3.5 rounded-2xl font-medium text-slate-300 glass-pill hover:text-white transition-all"
+          >
+            <Radio className="w-4 h-4" />
+            <span>Stream Audio from Anywhere</span>
+          </button>
+        </motion.div>
+      </div>
 
       {/* Featured Scenic Soundscape Journeys */}
       <section className="w-full mt-24 text-left">

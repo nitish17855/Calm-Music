@@ -20,6 +20,8 @@ import {
   Tv,
   MonitorSmartphone,
   ChevronDown,
+  ChevronUp,
+  X,
 } from 'lucide-react';
 import QueueDrawer from './QueueDrawer';
 import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
@@ -53,6 +55,7 @@ export default function PersistentPlayer() {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [isDockedBottom, setIsDockedBottom] = useState(false);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
 
   if (!currentTrack) return null;
 
@@ -70,7 +73,81 @@ export default function PersistentPlayer() {
 
   return (
     <>
-      {isTabletMode ? (
+      {/* ------------------------------------------------------------- */}
+      {/* MOBILE COMPACT BOTTOM BAR (< sm) - Sleek & Unobtrusive        */}
+      {/* ------------------------------------------------------------- */}
+      <div className="fixed bottom-2 left-2 right-2 z-40 sm:hidden pointer-events-auto">
+        <div className="glass-panel p-2 rounded-2xl border border-white/20 shadow-2xl flex items-center justify-between gap-2.5 bg-[#0a1219]/90 backdrop-blur-2xl">
+          {/* Album Art & Title -> Tapping expands to full MBUX controls */}
+          <div
+            onClick={() => setIsMobileExpanded(true)}
+            className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+          >
+            <div className="relative w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-slate-800 shadow">
+              <Image
+                src={currentTrack.coverUrl}
+                alt={currentTrack.title}
+                fill
+                sizes="40px"
+                className="object-cover"
+              />
+              {isPlaying && (
+                <div
+                  className="absolute inset-0 border-2 rounded-xl pointer-events-none"
+                  style={{ borderColor: config.accentColor }}
+                />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-xs font-semibold text-white truncate tracking-tight">
+                {currentTrack.title}
+              </h4>
+              <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                {currentTrack.artistName}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Playback Controls */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={togglePlay}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-md active:scale-95 transition-transform"
+              style={{ backgroundColor: config.accentColor }}
+              title={isPlaying ? 'Pause' : 'Play'}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <Pause className="w-3.5 h-3.5 fill-white" />
+              ) : (
+                <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
+              )}
+            </button>
+            <button
+              onClick={nextTrack}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white active:scale-95 transition-all"
+              title="Next Track"
+              aria-label="Next Track"
+            >
+              <SkipForward className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setIsMobileExpanded(true)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+              title="Expand Controls"
+              aria-label="Expand player"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* DESKTOP PLAYER (sm:block) - In-Car Tablet or Docked Player    */}
+      {/* ------------------------------------------------------------- */}
+      <div className="hidden sm:block">
+        {isTabletMode ? (
         /* ------------------------------------------------------------- */
         /* IN-CAR INFOTAINMENT TABLET (Mounted on the BMW Dashboard)    */
         /* ------------------------------------------------------------- */
@@ -553,6 +630,169 @@ export default function PersistentPlayer() {
               </div>
 
             </div>
+          </div>
+        </div>
+      )}
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* MOBILE EXPANDED FULL MBUX MODAL (< sm)                         */}
+      {/* ------------------------------------------------------------- */}
+      {isMobileExpanded && (
+        <div className="fixed inset-0 z-50 sm:hidden flex flex-col justify-end bg-black/85 backdrop-blur-xl animate-in fade-in duration-200 pointer-events-auto">
+          <div className="w-full bg-[#0a1219] border-t border-white/20 rounded-t-3xl p-5 shadow-2xl text-white max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
+            {/* Top Bar */}
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                <span className="font-mono text-xs uppercase font-semibold text-slate-300">
+                  MBUX Infotainment
+                </span>
+              </div>
+              <button
+                onClick={() => setIsMobileExpanded(false)}
+                className="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Album Cover & Details */}
+            <div className="flex flex-col items-center text-center my-4">
+              <div className="relative w-44 h-44 rounded-2xl overflow-hidden shadow-2xl border border-white/15 mb-4">
+                <Image
+                  src={currentTrack.coverUrl}
+                  alt={currentTrack.title}
+                  fill
+                  sizes="176px"
+                  className="object-cover"
+                />
+              </div>
+              <h3 className="text-base font-bold text-white tracking-tight px-4 line-clamp-1">
+                {currentTrack.title}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">{currentTrack.artistName}</p>
+
+              {/* Visualizer bars in sheet */}
+              <div className="mt-3">
+                <AudioVisualizerBars barCount={18} height={20} compact />
+              </div>
+            </div>
+
+            {/* Scrubber Progress Bar */}
+            <div className="w-full flex items-center gap-2.5 my-3">
+              <span className="text-[10px] font-mono text-slate-400 w-8 text-right">
+                {formatTime(currentTime)}
+              </span>
+              <div
+                className="relative flex-1 h-2 bg-white/10 rounded-full cursor-pointer py-1"
+                onClick={handleSeek}
+                role="slider"
+                aria-valuenow={currentTime}
+                aria-valuemin={0}
+                aria-valuemax={duration}
+              >
+                <div
+                  className="absolute top-0 bottom-0 left-0 rounded-full transition-all duration-100"
+                  style={{
+                    width: `${progressPercent}%`,
+                    backgroundColor: config.accentColor,
+                  }}
+                />
+              </div>
+              <span className="text-[10px] font-mono text-slate-400 w-8">
+                {formatTime(duration)}
+              </span>
+            </div>
+
+            {/* Playback Transport Buttons */}
+            <div className="flex items-center justify-center gap-6 my-4">
+              <button
+                onClick={toggleShuffle}
+                className={`p-2 rounded-xl transition-colors ${
+                  isShuffle ? 'text-emerald-400' : 'text-slate-400'
+                }`}
+                title="Shuffle"
+              >
+                <Shuffle className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={prevTrack}
+                className="p-2 text-slate-300 hover:text-white"
+                title="Previous Track"
+              >
+                <SkipBack className="w-6 h-6" />
+              </button>
+
+              <button
+                onClick={togglePlay}
+                className="w-14 h-14 rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
+                style={{
+                  backgroundColor: config.accentColor,
+                  boxShadow: `0 8px 24px -4px ${config.accentColor}80`,
+                }}
+                title={isPlaying ? 'Pause' : 'Play'}
+              >
+                {isPlaying ? (
+                  <Pause className="w-6 h-6 fill-white" />
+                ) : (
+                  <Play className="w-6 h-6 fill-white ml-0.5" />
+                )}
+              </button>
+
+              <button
+                onClick={nextTrack}
+                className="p-2 text-slate-300 hover:text-white"
+                title="Next Track"
+              >
+                <SkipForward className="w-6 h-6" />
+              </button>
+
+              <button
+                onClick={toggleRepeat}
+                className={`p-2 rounded-xl transition-colors ${
+                  repeatMode !== 'off' ? 'text-emerald-400' : 'text-slate-400'
+                }`}
+                title="Repeat"
+              >
+                {repeatMode === 'one' ? <Repeat1 className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
+              </button>
+            </div>
+
+            {/* Volume & Utility Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-white/10 mt-2">
+              <div className="flex items-center gap-2 flex-1 max-w-[200px]">
+                <button onClick={toggleMute} className="text-slate-400">
+                  {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={isMuted ? 0 : volume}
+                  onChange={(e) => setVolume(parseFloat(e.target.value))}
+                  className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer"
+                  style={{ accentColor: config.accentColor }}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setIsQueueOpen(true);
+                    setIsMobileExpanded(false);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-medium"
+                >
+                  <ListMusic className="w-4 h-4" />
+                  <span>Queue ({queue.length})</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

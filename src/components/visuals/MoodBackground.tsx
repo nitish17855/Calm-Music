@@ -42,6 +42,14 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
   // Real-time HUD readout state for the driving interface
   const [hudSpeed, setHudSpeed] = useState(75);
 
+  // Touch control states for mobile driving
+  const touchControlsRef = useRef({
+    steerLeft: false,
+    steerRight: false,
+    accelerate: false,
+    brake: false,
+  });
+
   // Use a ref for audioEnergy to avoid recreating canvas loop on every audio tick
   const audioEnergyRef = useRef(audioEnergy);
   useEffect(() => {
@@ -261,11 +269,12 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
       // SCENIC CANYON DRIVE (Interactive Driving with Real Speed & Steering)
       // -------------------------------------------------------------
       if (mood === 'drive') {
-        // 1. Process User Driving Input (Arrow Keys / W A S D)
-        const isAccelerating = activeKeys['ArrowUp'] || activeKeys['KeyW'];
-        const isBraking = activeKeys['ArrowDown'] || activeKeys['KeyS'];
-        const isSteeringLeft = activeKeys['ArrowLeft'] || activeKeys['KeyA'];
-        const isSteeringRight = activeKeys['ArrowRight'] || activeKeys['KeyD'];
+        // 1. Process User Driving Input (Arrow Keys / W A S D + Mobile Touch Controls)
+        const touch = touchControlsRef.current;
+        const isAccelerating = activeKeys['ArrowUp'] || activeKeys['KeyW'] || touch.accelerate;
+        const isBraking = activeKeys['ArrowDown'] || activeKeys['KeyS'] || touch.brake;
+        const isSteeringLeft = activeKeys['ArrowLeft'] || activeKeys['KeyA'] || touch.steerLeft;
+        const isSteeringRight = activeKeys['ArrowRight'] || activeKeys['KeyD'] || touch.steerRight;
 
         if (isAccelerating) {
           targetSpeed = Math.min(150, targetSpeed + 0.9);
@@ -548,19 +557,24 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
         // PERSPECTIVE 1: COCKPIT / DRIVER'S VIEW (Interactive Steering Wheel!)
         // -------------------------------------------------------------
         if (drivePerspective === 'cockpit') {
+          const isMobile = width < 640;
+
           // Subtle road vibration scaling with speed
           const roadVibration = Math.sin(time * (currentSpeed * 0.12)) * 0.8;
           const cabinBob = Math.sin(time * 1.5) * 1.0 + roadVibration;
           const accelPitch = isAccelerating ? -2.5 : isBraking ? 3.0 : 0;
 
           // A. Long Sculpted GT Hood
+          const hoodHalfW = isMobile ? width * 0.44 : 250;
+          const hoodBottomW = isMobile ? width * 0.58 : 360;
+
           ctx.save();
           ctx.beginPath();
-          ctx.moveTo(roadCenterX - 250, height * 0.73 + cabinBob + accelPitch);
+          ctx.moveTo(roadCenterX - hoodHalfW, height * 0.73 + cabinBob + accelPitch);
           ctx.lineTo(roadCenterX, height * 0.70 + cabinBob + accelPitch);
-          ctx.lineTo(roadCenterX + 250, height * 0.73 + cabinBob + accelPitch);
-          ctx.lineTo(roadCenterX + 360, height * 0.82 + cabinBob + accelPitch);
-          ctx.lineTo(roadCenterX - 360, height * 0.82 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX + hoodHalfW, height * 0.73 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX + hoodBottomW, height * 0.82 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX - hoodBottomW, height * 0.82 + cabinBob + accelPitch);
           ctx.closePath();
 
           const hoodGrad = ctx.createLinearGradient(0, height * 0.70, 0, height * 0.82);
@@ -609,8 +623,10 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
 
           // Rearview Mirror
           ctx.save();
+          const mirrorW = isMobile ? 120 : 170;
+          const mirrorH = isMobile ? 32 : 42;
           ctx.beginPath();
-          ctx.roundRect(roadCenterX - 85, 14, 170, 42, 12);
+          ctx.roundRect(roadCenterX - mirrorW / 2, 14, mirrorW, mirrorH, 10);
           ctx.fillStyle = '#152028';
           ctx.fill();
           ctx.strokeStyle = 'rgba(251, 233, 208, 0.3)';
@@ -623,7 +639,7 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           mirrorGrad.addColorStop(1, '#874F41');
           ctx.fillStyle = mirrorGrad;
           ctx.beginPath();
-          ctx.roundRect(roadCenterX - 79, 18, 158, 34, 8);
+          ctx.roundRect(roadCenterX - (mirrorW - 12) / 2, 18, mirrorW - 12, mirrorH - 8, 6);
           ctx.fill();
 
           ctx.fillStyle = '#0d151a';
@@ -673,10 +689,11 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           ctx.shadowBlur = 0;
 
           // D. Digital Instrument Cluster with Real Interactive Speedometer & Tachometer!
-          const clusterX = Math.max(160, width * 0.28);
-          const clusterY = dashY - 8;
-          const clusterW = 230;
-          const clusterH = 70;
+          // On mobile portrait, center the cluster so it sits naturally in the cockpit viewport
+          const clusterX = isMobile ? width * 0.5 : Math.max(160, width * 0.28);
+          const clusterY = isMobile ? dashY - 16 : dashY - 8;
+          const clusterW = isMobile ? Math.min(width * 0.88, 220) : 230;
+          const clusterH = isMobile ? 62 : 70;
 
           ctx.save();
           ctx.translate(clusterX - clusterW / 2, clusterY);
@@ -696,35 +713,35 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
 
           // Speedometer (Left Dial) - Real-time Interactive Speed Readout!
           ctx.fillStyle = '#FBE9D0';
-          ctx.font = 'bold 21px monospace';
-          ctx.fillText(`${Math.round(currentSpeed)}`, 28, 30);
-          ctx.font = '9px sans-serif';
+          ctx.font = isMobile ? 'bold 18px monospace' : 'bold 21px monospace';
+          ctx.fillText(`${Math.round(currentSpeed)}`, 22, 28);
+          ctx.font = '8px sans-serif';
           ctx.fillStyle = 'rgba(251, 233, 208, 0.7)';
-          ctx.fillText('KM/H', 32, 44);
+          ctx.fillText('KM/H', 24, 40);
 
           // Tachometer (Right Dial) - Dynamic Engine RPM calculating from throttle & speed!
           const rpm = Math.round(1400 + (currentSpeed / 150) * 3400 + (isAccelerating ? 750 : 0) + curAudio * 350);
           ctx.fillStyle = rpm > 4200 ? '#ef4444' : '#E64833';
-          ctx.font = 'bold 16px monospace';
-          ctx.fillText(`${rpm}`, clusterW - 70, 28);
-          ctx.font = '9px sans-serif';
+          ctx.font = isMobile ? 'bold 14px monospace' : 'bold 16px monospace';
+          ctx.fillText(`${rpm}`, clusterW - (isMobile ? 58 : 70), 26);
+          ctx.font = '8px sans-serif';
           ctx.fillStyle = 'rgba(230, 72, 51, 0.75)';
-          ctx.fillText('RPM', clusterW - 55, 42);
+          ctx.fillText('RPM', clusterW - (isMobile ? 48 : 55), 38);
 
           // Center Status HUD
           ctx.fillStyle = isAccelerating ? '#22c55e' : isBraking ? '#ef4444' : '#90AEAD';
-          ctx.font = 'bold 9px sans-serif';
-          ctx.fillText(isAccelerating ? 'SPORT ACCEL' : isBraking ? 'BRAKE ACTIVE' : 'MERCEDES GT', clusterW / 2 - 28, 22);
+          ctx.font = 'bold 8px sans-serif';
+          ctx.fillText(isAccelerating ? 'SPORT ACCEL' : isBraking ? 'BRAKE ACTIVE' : 'MERCEDES GT', clusterW / 2 - 28, 20);
           ctx.fillStyle = '#FBE9D0';
-          ctx.font = '8px sans-serif';
-          ctx.fillText('DYNAMIC CRUISE', clusterW / 2 - 30, 36);
+          ctx.font = '7.5px sans-serif';
+          ctx.fillText('DYNAMIC CRUISE', clusterW / 2 - 30, 32);
 
           ctx.restore();
 
-          // E. INTERACTIVE STEERING WHEEL (Free & Rotating Smoothly with A/D or Arrow Keys!)
+          // E. INTERACTIVE STEERING WHEEL (Free & Rotating Smoothly with A/D, Arrows, or Touch!)
           const wheelX = clusterX;
-          const wheelY = height * 0.88 + cabinBob;
-          const wheelR = 108;
+          const wheelY = isMobile ? height * 0.91 + cabinBob : height * 0.88 + cabinBob;
+          const wheelR = isMobile ? Math.min(width * 0.22, 82) : 108;
 
           ctx.save();
           ctx.translate(wheelX, wheelY);
@@ -735,26 +752,27 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           // Steering Wheel Rim
           ctx.beginPath();
           ctx.arc(0, 0, wheelR, 0, Math.PI * 2);
-          ctx.lineWidth = 22;
+          ctx.lineWidth = isMobile ? 16 : 22;
           ctx.strokeStyle = '#422017';
           ctx.stroke();
 
           // Inner rim trim
           ctx.beginPath();
-          ctx.arc(0, 0, wheelR - 10, 0, Math.PI * 2);
-          ctx.lineWidth = 2;
+          ctx.arc(0, 0, wheelR - (isMobile ? 8 : 10), 0, Math.PI * 2);
+          ctx.lineWidth = 1.5;
           ctx.strokeStyle = 'rgba(248, 250, 252, 0.25)';
           ctx.stroke();
 
           // 3 Brushed Aluminum Spokes
           ctx.fillStyle = '#cbd5e1';
-          ctx.fillRect(-wheelR + 10, -10, wheelR * 0.55, 20);
-          ctx.fillRect(wheelR * 0.35, -10, wheelR * 0.55, 20);
-          ctx.fillRect(-12, wheelR * 0.3, 24, wheelR * 0.6);
+          ctx.fillRect(-wheelR + 8, -8, wheelR * 0.55, isMobile ? 16 : 20);
+          ctx.fillRect(wheelR * 0.35, -8, wheelR * 0.55, isMobile ? 16 : 20);
+          ctx.fillRect(-10, wheelR * 0.3, 20, wheelR * 0.6);
 
           // Center Hub (Airbag & Mercedes Star)
+          const hubR = isMobile ? 30 : 38;
           ctx.beginPath();
-          ctx.arc(0, 0, 38, 0, Math.PI * 2);
+          ctx.arc(0, 0, hubR, 0, Math.PI * 2);
           ctx.fillStyle = '#2a140e';
           ctx.fill();
           ctx.strokeStyle = '#cbd5e1';
@@ -762,7 +780,7 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           ctx.stroke();
 
           // Mercedes Star in center of rotating wheel
-          drawMercedesStar(0, 0, 18);
+          drawMercedesStar(0, 0, isMobile ? 14 : 18);
 
           ctx.restore();
           ctx.restore();
@@ -1155,19 +1173,77 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
 
       {/* Interactive Driving HUD Controls Hint (When in Scenic Drive mode) */}
       {mood === 'drive' && (
-        <div className="fixed top-20 right-4 z-30 pointer-events-auto hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl glass-panel text-slate-300 text-xs border border-white/10 shadow-lg animate-in fade-in duration-500">
-          <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300">
+        <>
+          {/* Desktop HUD Pill */}
+          <div className="fixed top-20 right-4 z-30 pointer-events-auto hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl glass-panel text-slate-300 text-xs border border-white/10 shadow-lg animate-in fade-in duration-500">
+            <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{hudSpeed} KM/H</span>
+            </div>
+            <span className="text-white/20">|</span>
+            <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+              <span className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono">W / S</span>
+              <span>Speed</span>
+              <span className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono ml-1">A / D</span>
+              <span>Steer</span>
+            </div>
+          </div>
+
+          {/* Mobile On-Screen Touch Driving Controls & Speed Badge */}
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 sm:hidden flex items-center gap-2 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 shadow-md">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>{hudSpeed} KM/H</span>
+            <span className="font-mono text-xs font-semibold text-amber-300">{hudSpeed} KM/H</span>
+            <span className="text-[10px] text-slate-400 uppercase font-mono">Mercedes GT</span>
           </div>
-          <span className="text-white/20">|</span>
-          <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-            <span className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono">W / S</span>
-            <span>Speed</span>
-            <span className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono ml-1">A / D</span>
-            <span>Steer</span>
+
+          {/* Mobile Touch Steering (Bottom Left) */}
+          <div className="fixed bottom-24 left-3 z-30 sm:hidden flex items-center gap-2 pointer-events-auto select-none">
+            <button
+              onTouchStart={() => { touchControlsRef.current.steerLeft = true; }}
+              onTouchEnd={() => { touchControlsRef.current.steerLeft = false; }}
+              onMouseDown={() => { touchControlsRef.current.steerLeft = true; }}
+              onMouseUp={() => { touchControlsRef.current.steerLeft = false; }}
+              className="w-12 h-12 rounded-2xl bg-black/65 active:bg-emerald-500/30 backdrop-blur-xl border border-white/20 shadow-xl flex items-center justify-center text-white text-base font-bold transition-all active:scale-95"
+              aria-label="Steer Left"
+            >
+              ◀
+            </button>
+            <button
+              onTouchStart={() => { touchControlsRef.current.steerRight = true; }}
+              onTouchEnd={() => { touchControlsRef.current.steerRight = false; }}
+              onMouseDown={() => { touchControlsRef.current.steerRight = true; }}
+              onMouseUp={() => { touchControlsRef.current.steerRight = false; }}
+              className="w-12 h-12 rounded-2xl bg-black/65 active:bg-emerald-500/30 backdrop-blur-xl border border-white/20 shadow-xl flex items-center justify-center text-white text-base font-bold transition-all active:scale-95"
+              aria-label="Steer Right"
+            >
+              ▶
+            </button>
           </div>
-        </div>
+
+          {/* Mobile Touch Pedals: Brake & Gas (Bottom Right) */}
+          <div className="fixed bottom-24 right-3 z-30 sm:hidden flex items-center gap-2 pointer-events-auto select-none">
+            <button
+              onTouchStart={() => { touchControlsRef.current.brake = true; }}
+              onTouchEnd={() => { touchControlsRef.current.brake = false; }}
+              onMouseDown={() => { touchControlsRef.current.brake = true; }}
+              onMouseUp={() => { touchControlsRef.current.brake = false; }}
+              className="w-12 h-12 rounded-2xl bg-black/65 active:bg-rose-500/30 backdrop-blur-xl border border-rose-500/30 shadow-xl flex items-center justify-center text-rose-400 text-xs font-mono font-bold transition-all active:scale-95"
+              aria-label="Brake"
+            >
+              STOP
+            </button>
+            <button
+              onTouchStart={() => { touchControlsRef.current.accelerate = true; }}
+              onTouchEnd={() => { touchControlsRef.current.accelerate = false; }}
+              onMouseDown={() => { touchControlsRef.current.accelerate = true; }}
+              onMouseUp={() => { touchControlsRef.current.accelerate = false; }}
+              className="w-12 h-12 rounded-2xl bg-black/65 active:bg-emerald-500/30 backdrop-blur-xl border border-emerald-500/30 shadow-xl flex items-center justify-center text-emerald-400 text-xs font-mono font-bold transition-all active:scale-95"
+              aria-label="Gas / Accelerate"
+            >
+              GAS
+            </button>
+          </div>
+        </>
       )}
     </>
   );
