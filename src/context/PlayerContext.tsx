@@ -378,6 +378,86 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlay, seek, currentTime, setVolume, volume, toggleMute]);
 
+  // -------------------------------------------------------------
+  // ANDROID BACKGROUND AUDIO & MEDIA SESSION API INTEGRATION
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator) || !currentTrack) {
+      return;
+    }
+
+    try {
+      // 1. Sync Native Lock-Screen & Notification Player Metadata
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artistName,
+        album: currentTrack.albumName || 'Calm Music - Ambient Soundscapes',
+        artwork: [
+          { src: currentTrack.coverUrl, sizes: '96x96', type: 'image/jpeg' },
+          { src: currentTrack.coverUrl, sizes: '128x128', type: 'image/jpeg' },
+          { src: currentTrack.coverUrl, sizes: '192x192', type: 'image/jpeg' },
+          { src: currentTrack.coverUrl, sizes: '256x256', type: 'image/jpeg' },
+          { src: currentTrack.coverUrl, sizes: '384x384', type: 'image/jpeg' },
+          { src: currentTrack.coverUrl, sizes: '512x512', type: 'image/jpeg' },
+        ],
+      });
+
+      // 2. Sync Native Playback State
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+      // 3. Register Native Hardware Buttons & Notification Controls
+      navigator.mediaSession.setActionHandler('play', () => {
+        togglePlay();
+      });
+
+      navigator.mediaSession.setActionHandler('pause', () => {
+        togglePlay();
+      });
+
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        prevTrack();
+      });
+
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        nextTrack();
+      });
+
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined && details.seekTime !== null) {
+          seek(details.seekTime);
+        }
+      });
+
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        const skipTime = details.seekOffset || 10;
+        seek(Math.max(0, (audioRef.current?.currentTime || 0) - skipTime));
+      });
+
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        const skipTime = details.seekOffset || 10;
+        seek(Math.min(duration, (audioRef.current?.currentTime || 0) + skipTime));
+      });
+    } catch (err) {
+      console.warn('MediaSession initialization warning:', err);
+    }
+  }, [currentTrack, isPlaying, duration, togglePlay, prevTrack, nextTrack, seek]);
+
+  // Sync position state with lock-screen scrubber
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator) || !duration || isNaN(duration)) {
+      return;
+    }
+    try {
+      if ('setPositionState' in navigator.mediaSession) {
+        navigator.mediaSession.setPositionState({
+          duration: Math.max(0, duration),
+          playbackRate: 1.0,
+          position: Math.max(0, Math.min(currentTime, duration)),
+        });
+      }
+    } catch (e) {}
+  }, [currentTime, duration]);
+
   return (
     <PlayerContext.Provider
       value={{

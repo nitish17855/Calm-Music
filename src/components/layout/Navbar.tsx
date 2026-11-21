@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useMood, MOOD_CONFIGS } from '@/context/MoodContext';
 import { useZen } from '@/components/layout/AppShell';
+import { usePwa } from '@/components/pwa/PwaProvider';
 import { MoodMode } from '@/types';
-import { Moon, CloudRain, Compass, Heart, Car, Music, Eye, SlidersHorizontal, X } from 'lucide-react';
+import { Moon, CloudRain, Compass, Heart, Car, Music, Eye, SlidersHorizontal, X, Download } from 'lucide-react';
 
 const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
   drive: <Car className="w-4 h-4" />,
@@ -18,6 +19,7 @@ const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
 export default function Navbar() {
   const { mood, setMood, config, drivePerspective, toggleDrivePerspective } = useMood();
   const { toggleZenMode } = useZen();
+  const { isInstallable, isInstalled, installApp } = usePwa();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const moods: MoodMode[] = ['drive', 'rose', 'night', 'rain', 'focus'];
@@ -80,6 +82,18 @@ export default function Navbar() {
               <span>Scenic View</span>
             </button>
 
+            {/* PWA Install Button (Desktop) */}
+            {isInstallable && !isInstalled && (
+              <button
+                onClick={installApp}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-all active:scale-95 shadow-sm"
+                title="Install Calm Music PWA"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Install App</span>
+              </button>
+            )}
+
             {/* Mood Atmosphere Selector */}
             <div
               className="flex items-center p-1 rounded-xl bg-black/40 border border-white/5"
@@ -119,6 +133,18 @@ export default function Navbar() {
 
           {/* MOBILE CONTROLS (Clean, Single Menu Trigger) */}
           <div className="flex md:hidden items-center gap-1.5">
+            {/* Quick Install Pill on Mobile */}
+            {isInstallable && !isInstalled && (
+              <button
+                onClick={installApp}
+                className="flex items-center gap-1 px-2 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-semibold active:scale-95"
+                title="Install Calm Music App"
+              >
+                <Download className="w-3 h-3 text-emerald-400" />
+                <span>Install</span>
+              </button>
+            )}
+
             {/* Driving Perspective Quick Toggle */}
             {mood === 'drive' && (
               <button
@@ -170,6 +196,20 @@ export default function Navbar() {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Prominent Install App Button in Mobile Drawer */}
+            {isInstallable && !isInstalled && (
+              <button
+                onClick={() => {
+                  installApp();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full mb-4 flex items-center justify-center gap-2 p-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-95 text-black font-semibold text-xs transition-all shadow-lg active:scale-95"
+              >
+                <Download className="w-4 h-4" />
+                <span>Install Calm Music (Home Screen App)</span>
+              </button>
+            )}
 
             {/* Mood Environments Grid */}
             <div className="grid grid-cols-2 gap-2 mb-4">
