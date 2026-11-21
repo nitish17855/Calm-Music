@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useMood, MOOD_CONFIGS } from '@/context/MoodContext';
+import { useZen } from '@/components/layout/AppShell';
 import { MoodMode } from '@/types';
-import { Moon, CloudRain, Compass, Heart, Car, Music, User, LogOut } from 'lucide-react';
+import { Moon, CloudRain, Compass, Heart, Car, Music, User, LogOut, Eye } from 'lucide-react';
 
 const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
   drive: <Car className="w-3.5 h-3.5" />,
@@ -20,6 +21,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const { mood, setMood, config } = useMood();
+  const { toggleZenMode } = useZen();
 
   const navLinks = [
     { href: '/', label: 'Discover' },
@@ -81,9 +83,19 @@ export default function Navbar() {
           })}
         </nav>
 
-        {/* Right Section: Mood Switcher & Auth */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Right Section: Zen Mode / Mood Switcher / Auth */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
           
+          {/* Zen View / Scenic Mode Toggle Button */}
+          <button
+            onClick={toggleZenMode}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium glass-pill text-slate-300 hover:text-white transition-all"
+            title="Toggle Scenic View / Hide UI (Press Z or Esc)"
+          >
+            <Eye className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Scenic View</span>
+          </button>
+
           {/* Mood Mode Selector */}
           <div
             className="flex items-center p-1 rounded-xl bg-black/40 border border-white/5 overflow-x-auto"

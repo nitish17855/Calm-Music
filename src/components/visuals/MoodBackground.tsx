@@ -278,7 +278,7 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
         ctx.setLineDash([]); // Reset line dash
 
         // Headlight Beams illuminating the road ahead
-        const carY = height * 0.78 + Math.sin(time * 2) * 1.5; // Gentle cruising suspension bob
+        const carY = height * 0.73 + Math.sin(time * 2) * 1.5; // Gentle cruising suspension bob
         const carX = roadCenterX;
 
         ctx.save();
