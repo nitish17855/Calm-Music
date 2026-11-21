@@ -4,6 +4,21 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { MoodMode, MoodConfig } from '@/types';
 
 export const MOOD_CONFIGS: Record<MoodMode, MoodConfig> = {
+  drive: {
+    id: 'drive',
+    name: 'Jungle Drive',
+    tagline: 'Late-night cruising through a vast misty forest',
+    description: 'A peaceful night drive along a winding road through deep towering jungle trees, headlights slicing through calm ambient mist.',
+    icon: 'Car',
+    gradient: {
+      from: '#030c07',
+      via: '#07180f',
+      to: '#0b2618',
+    },
+    accentColor: '#10b981',
+    particleColor: 'rgba(52, 211, 153, 0.4)',
+    particleCount: 45,
+  },
   rose: {
     id: 'rose',
     name: 'Sunset Rose',
@@ -16,14 +31,14 @@ export const MOOD_CONFIGS: Record<MoodMode, MoodConfig> = {
       to: '#421727',
     },
     accentColor: '#f43f5e',
-    particleColor: 'rgba(251, 113, 133, 0.65)',
-    particleCount: 60,
+    particleColor: 'rgba(251, 113, 133, 0.4)',
+    particleCount: 50,
   },
   night: {
     id: 'night',
     name: 'Deep Night',
     tagline: 'Starlit tranquil expanse for nocturnal reflection',
-    description: 'Deep cosmic blues and starlight drifts designed to lower mental fatigue.',
+    description: 'Deep cosmic blues and slow starlight drifts designed to lower mental fatigue.',
     icon: 'Moon',
     gradient: {
       from: '#05070e',
@@ -31,14 +46,14 @@ export const MOOD_CONFIGS: Record<MoodMode, MoodConfig> = {
       to: '#161329',
     },
     accentColor: '#818cf8',
-    particleColor: 'rgba(165, 180, 252, 0.6)',
-    particleCount: 65,
+    particleColor: 'rgba(165, 180, 252, 0.4)',
+    particleCount: 55,
   },
   rain: {
     id: 'rain',
     name: 'Gentle Rain',
     tagline: 'Melancholic drizzle and misty ripples',
-    description: 'Cool slate-teal tones with subtle falling precipitation and droplet ripples.',
+    description: 'Cool slate-teal tones with brisk precipitation and droplet ripples.',
     icon: 'CloudRain',
     gradient: {
       from: '#061017',
@@ -61,8 +76,8 @@ export const MOOD_CONFIGS: Record<MoodMode, MoodConfig> = {
       to: '#112f22',
     },
     accentColor: '#34d399',
-    particleColor: 'rgba(52, 211, 153, 0.55)',
-    particleCount: 50,
+    particleColor: 'rgba(52, 211, 153, 0.4)',
+    particleCount: 40,
   },
 };
 
@@ -76,7 +91,7 @@ interface MoodContextType {
 const MoodContext = createContext<MoodContextType | undefined>(undefined);
 
 export function MoodProvider({ children }: { children: React.ReactNode }) {
-  const [mood, setMoodState] = useState<MoodMode>('rose');
+  const [mood, setMoodState] = useState<MoodMode>('drive');
 
   useEffect(() => {
     // Read persisted mood if available
@@ -94,7 +109,7 @@ export function MoodProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleNextMood = () => {
-    const moods: MoodMode[] = ['rose', 'night', 'rain', 'focus'];
+    const moods: MoodMode[] = ['drive', 'rose', 'night', 'rain', 'focus'];
     const nextIndex = (moods.indexOf(mood) + 1) % moods.length;
     setMood(moods[nextIndex]);
   };

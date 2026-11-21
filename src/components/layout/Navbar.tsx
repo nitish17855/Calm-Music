@@ -6,9 +6,10 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useMood, MOOD_CONFIGS } from '@/context/MoodContext';
 import { MoodMode } from '@/types';
-import { Moon, CloudRain, Compass, Heart, Music, User, LogOut } from 'lucide-react';
+import { Moon, CloudRain, Compass, Heart, Car, Music, User, LogOut } from 'lucide-react';
 
 const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
+  drive: <Car className="w-3.5 h-3.5" />,
   rose: <Heart className="w-3.5 h-3.5" />,
   night: <Moon className="w-3.5 h-3.5" />,
   rain: <CloudRain className="w-3.5 h-3.5" />,
@@ -26,7 +27,7 @@ export default function Navbar() {
     { href: '/library', label: 'Library' },
   ];
 
-  const moods: MoodMode[] = ['rose', 'night', 'rain', 'focus'];
+  const moods: MoodMode[] = ['drive', 'rose', 'night', 'rain', 'focus'];
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 px-3 md:px-8 py-3 transition-all duration-300">
@@ -85,7 +86,7 @@ export default function Navbar() {
           
           {/* Mood Mode Selector */}
           <div
-            className="flex items-center p-1 rounded-xl bg-black/40 border border-white/5"
+            className="flex items-center p-1 rounded-xl bg-black/40 border border-white/5 overflow-x-auto"
             role="radiogroup"
             aria-label="Select ambient mood mode"
           >
@@ -99,7 +100,7 @@ export default function Navbar() {
                   role="radio"
                   aria-checked={active}
                   title={`Switch to ${cfg.name}`}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 whitespace-nowrap ${
                     active
                       ? 'text-white shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
@@ -112,7 +113,7 @@ export default function Navbar() {
                   <span style={{ color: active ? cfg.accentColor : 'inherit' }}>
                     {MOOD_ICONS[m]}
                   </span>
-                  <span className="capitalize hidden lg:inline">{m}</span>
+                  <span className="capitalize hidden xl:inline">{m}</span>
                 </button>
               );
             })}

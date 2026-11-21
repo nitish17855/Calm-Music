@@ -1,4 +1,4 @@
-export type MoodMode = 'night' | 'rain' | 'focus' | 'rose';
+export type MoodMode = 'rose' | 'night' | 'rain' | 'focus' | 'drive';
 
 export interface MoodConfig {
   id: MoodMode;
