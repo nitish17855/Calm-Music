@@ -41,6 +41,7 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
   
   // Real-time HUD readout state for the driving interface
   const [hudSpeed, setHudSpeed] = useState(75);
+  const [hudDistance, setHudDistance] = useState(0);
 
   // Touch control states for mobile driving
   const touchControlsRef = useRef({
@@ -93,6 +94,7 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
     let carLaneOffset = 0; // lateral position on highway
     let roadProgress = 0;
     let roadDistance = 0;
+    let totalDistanceKm = 0;
 
     const activeKeys: Record<string, boolean> = {};
 
@@ -260,6 +262,58 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
       ctx.restore();
     };
 
+    // Helper: Draw Mercedes AMG Turbine Air Vent with Chrome Rim and Ambient Backlight
+    const drawTurbineVent = (x: number, y: number, radius: number, curAudioEnergy: number) => {
+      ctx.save();
+      ctx.translate(x, y);
+
+      // Outer bezel ring
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#0a0f14';
+      ctx.fill();
+      const bezelGrad = ctx.createLinearGradient(-radius, -radius, radius, radius);
+      bezelGrad.addColorStop(0, '#e2e8f0');
+      bezelGrad.addColorStop(0.5, '#64748b');
+      bezelGrad.addColorStop(1, '#1e293b');
+      ctx.strokeStyle = bezelGrad;
+      ctx.lineWidth = radius * 0.16;
+      ctx.stroke();
+
+      // Inner ambient red/amber LED glow pulsing to music
+      const ventGlow = ctx.createRadialGradient(0, 0, 1, 0, 0, radius * 0.75);
+      ventGlow.addColorStop(0, `rgba(230, 72, 51, ${0.45 + curAudioEnergy * 0.5})`);
+      ventGlow.addColorStop(0.7, `rgba(230, 72, 51, ${0.15 + curAudioEnergy * 0.25})`);
+      ventGlow.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
+      ctx.fillStyle = ventGlow;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.75, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4 Aerodynamic Turbine Vanes
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 4; i++) {
+        const angle = (i * Math.PI) / 2 + Math.PI / 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(angle) * (radius * 0.72), Math.sin(angle) * (radius * 0.72));
+        ctx.stroke();
+      }
+
+      // Center knob
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.22, 0, Math.PI * 2);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fill();
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.restore();
+    };
+
     // Render loop
     const render = () => {
       time += 0.008;
@@ -301,6 +355,7 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
         hudUpdateCounter++;
         if (hudUpdateCounter % 15 === 0) {
           setHudSpeed(Math.round(currentSpeed));
+          setHudDistance(totalDistanceKm);
         }
 
         // Lane position & road distance
@@ -308,6 +363,7 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
         carLaneOffset = Math.max(-width * 0.16, Math.min(width * 0.16, carLaneOffset + currentSteer * (currentSpeed * 0.035)));
         roadProgress = (roadProgress + 0.004 * speedRatio) % 1.0;
         roadDistance += currentSpeed * 0.12;
+        totalDistanceKm += (currentSpeed / 216000);
 
         // Subtle organic winding canyon curvature
         const canyonCurve = Math.sin(roadDistance * 0.0006) * 35;
@@ -621,166 +677,393 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           ctx.closePath();
           ctx.fill();
 
-          // Rearview Mirror
+          // Top Windshield Blue-Cyan Anti-Glare Sun Tint
+          const topTint = ctx.createLinearGradient(0, 0, 0, height * 0.14);
+          topTint.addColorStop(0, 'rgba(17, 30, 38, 0.85)');
+          topTint.addColorStop(0.6, 'rgba(36, 72, 85, 0.35)');
+          topTint.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = topTint;
+          ctx.fillRect(0, 0, width, height * 0.14);
+
+          // Parked Windshield Wipers at Base of Windshield Glass
           ctx.save();
-          const mirrorW = isMobile ? 120 : 170;
-          const mirrorH = isMobile ? 32 : 42;
+          ctx.strokeStyle = '#0e171e';
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.roundRect(roadCenterX - mirrorW / 2, 14, mirrorW, mirrorH, 10);
-          ctx.fillStyle = '#152028';
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(251, 233, 208, 0.3)';
-          ctx.lineWidth = 1.5;
+          ctx.moveTo(width * 0.18, height * 0.77 + cabinBob);
+          ctx.lineTo(width * 0.44, height * 0.75 + cabinBob);
           ctx.stroke();
-
-          const mirrorGrad = ctx.createLinearGradient(0, 18, 0, 52);
-          mirrorGrad.addColorStop(0, '#244855');
-          mirrorGrad.addColorStop(0.5, '#E64833');
-          mirrorGrad.addColorStop(1, '#874F41');
-          ctx.fillStyle = mirrorGrad;
           ctx.beginPath();
-          ctx.roundRect(roadCenterX - (mirrorW - 12) / 2, 18, mirrorW - 12, mirrorH - 8, 6);
-          ctx.fill();
-
-          ctx.fillStyle = '#0d151a';
-          ctx.fillRect(roadCenterX - 6, 0, 12, 15);
+          ctx.moveTo(width * 0.52, height * 0.77 + cabinBob);
+          ctx.lineTo(width * 0.82, height * 0.76 + cabinBob);
+          ctx.stroke();
           ctx.restore();
 
-          // C. Dashboard Cowl (Saddle Tan Leather #874F41 with Cream Stitching)
+          // Rearview Mirror with Frameless Bezel, Sunset Horizon Reflection & Green Sensor LED
+          ctx.save();
+          const mirrorW = isMobile ? 130 : 190;
+          const mirrorH = isMobile ? 34 : 44;
+          const mirrorX = roadCenterX - mirrorW / 2;
+          const mirrorY = 16;
+
+          // Dual Mounting Stems to windshield roof
+          ctx.fillStyle = '#0a1014';
+          ctx.fillRect(roadCenterX - 14, 0, 28, 18);
+
+          // Outer Casing & Shadow
+          ctx.beginPath();
+          ctx.roundRect(mirrorX, mirrorY, mirrorW, mirrorH, 10);
+          ctx.fillStyle = '#111920';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          // Mirror Glass (Auto-dimming green-blue tint with sunset road reflection)
+          const glassW = mirrorW - 10;
+          const glassH = mirrorH - 8;
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(mirrorX + 5, mirrorY + 4, glassW, glassH, 7);
+          ctx.clip();
+
+          // Reflected Sky & Horizon
+          const refSky = ctx.createLinearGradient(0, mirrorY + 4, 0, mirrorY + glassH);
+          refSky.addColorStop(0, '#1c3b47');
+          refSky.addColorStop(0.5, '#E64833');
+          refSky.addColorStop(0.7, '#FBE9D0');
+          refSky.addColorStop(0.72, '#2b3c46');
+          refSky.addColorStop(1, '#111a20');
+          ctx.fillStyle = refSky;
+          ctx.fillRect(mirrorX + 5, mirrorY + 4, glassW, glassH);
+
+          // Reflected Road Lines receding into distance
+          ctx.strokeStyle = 'rgba(230, 72, 51, 0.8)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(roadCenterX, mirrorY + glassH * 0.72);
+          ctx.lineTo(roadCenterX, mirrorY + glassH);
+          ctx.stroke();
+          ctx.restore();
+
+          // Green Auto-Dimming Sensor LED on mirror bottom
+          ctx.beginPath();
+          ctx.arc(roadCenterX, mirrorY + mirrorH - 2, 1.8, 0, Math.PI * 2);
+          ctx.fillStyle = '#22c55e';
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = '#22c55e';
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.restore();
+
+          // C. Dashboard Cowl (Sculpted Multi-Tone Saddle Tan Leather & Carbon Fiber)
           const dashY = height * 0.77 + cabinBob;
           ctx.save();
           ctx.beginPath();
           ctx.moveTo(0, height);
           ctx.lineTo(0, dashY + 30);
-          ctx.quadraticCurveTo(width * 0.28, dashY - 14, width * 0.5, dashY + 8);
+          ctx.quadraticCurveTo(width * 0.28, dashY - 16, width * 0.5, dashY + 6);
           ctx.quadraticCurveTo(width * 0.72, dashY + 18, width, dashY + 12);
           ctx.lineTo(width, height);
           ctx.closePath();
 
           const dashGrad = ctx.createLinearGradient(0, dashY - 20, 0, height);
-          dashGrad.addColorStop(0, '#5a3127');
-          dashGrad.addColorStop(0.3, '#3d1f18');
-          dashGrad.addColorStop(1, '#1e0e0a');
+          dashGrad.addColorStop(0, '#5a3127');   // Saddle Tan Highlight
+          dashGrad.addColorStop(0.25, '#3d1f18'); // Rich Terracotta Brown
+          dashGrad.addColorStop(0.6, '#24120e');  // Dark Leather
+          dashGrad.addColorStop(1, '#0f0705');    // Footwell shadow
           ctx.fillStyle = dashGrad;
           ctx.fill();
 
-          // Cream Double Stitching Line
-          ctx.strokeStyle = 'rgba(251, 233, 208, 0.45)';
-          ctx.lineWidth = 1.5;
+          // Brushed Aluminum / Titanium Inlay Trim Strip
+          ctx.strokeStyle = 'rgba(203, 213, 225, 0.35)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(width * 0.08, dashY + 36);
+          ctx.quadraticCurveTo(width * 0.28, dashY - 6, width * 0.5, dashY + 16);
+          ctx.quadraticCurveTo(width * 0.72, dashY + 26, width * 0.94, dashY + 20);
+          ctx.stroke();
+
+          // Precision Double Stitching Line (#FBE9D0 Cream)
+          ctx.strokeStyle = 'rgba(251, 233, 208, 0.55)';
+          ctx.lineWidth = 1.4;
           ctx.setLineDash([4, 4]);
           ctx.beginPath();
-          ctx.moveTo(width * 0.1, dashY + 34);
-          ctx.quadraticCurveTo(width * 0.28, dashY - 8, width * 0.5, dashY + 14);
-          ctx.quadraticCurveTo(width * 0.72, dashY + 24, width * 0.92, dashY + 18);
+          ctx.moveTo(width * 0.08, dashY + 32);
+          ctx.quadraticCurveTo(width * 0.28, dashY - 10, width * 0.5, dashY + 12);
+          ctx.quadraticCurveTo(width * 0.72, dashY + 22, width * 0.94, dashY + 16);
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // Ambient LED Ribbon
+          // Ambient LED Ribbon (Reacting to Audio Energy!)
           const ambientPulse = 0.65 + curAudio * 0.35;
-          ctx.shadowBlur = 12;
+          ctx.shadowBlur = 14;
           ctx.shadowColor = `rgba(230, 72, 51, ${ambientPulse * 0.9})`;
           ctx.strokeStyle = `rgba(230, 72, 51, ${ambientPulse})`;
           ctx.lineWidth = 2.2;
           ctx.beginPath();
-          ctx.moveTo(width * 0.1, dashY + 30);
-          ctx.quadraticCurveTo(width * 0.28, dashY - 12, width * 0.5, dashY + 10);
-          ctx.quadraticCurveTo(width * 0.72, dashY + 20, width * 0.92, dashY + 14);
+          ctx.moveTo(width * 0.08, dashY + 28);
+          ctx.quadraticCurveTo(width * 0.28, dashY - 14, width * 0.5, dashY + 8);
+          ctx.quadraticCurveTo(width * 0.72, dashY + 18, width * 0.94, dashY + 12);
           ctx.stroke();
           ctx.shadowBlur = 0;
 
-          // D. Digital Instrument Cluster with Real Interactive Speedometer & Tachometer!
-          // On mobile portrait, center the cluster so it sits naturally in the cockpit viewport
+          // Mercedes AMG Turbine Air Vents on Dashboard
+          const ventRadius = isMobile ? 15 : 22;
+          if (!isMobile) {
+            drawTurbineVent(width * 0.14, dashY + 44, ventRadius, curAudio);
+            drawTurbineVent(width * 0.64, dashY + 40, ventRadius, curAudio);
+            drawTurbineVent(width * 0.74, dashY + 44, ventRadius, curAudio);
+            drawTurbineVent(width * 0.88, dashY + 38, ventRadius, curAudio);
+          } else {
+            drawTurbineVent(width * 0.12, dashY + 38, ventRadius, curAudio);
+            drawTurbineVent(width * 0.88, dashY + 38, ventRadius, curAudio);
+          }
+
+          // D. Digital Instrument Cluster (AMG Digital Cockpit Display)
           const clusterX = isMobile ? width * 0.5 : Math.max(160, width * 0.28);
-          const clusterY = isMobile ? dashY - 16 : dashY - 8;
-          const clusterW = isMobile ? Math.min(width * 0.88, 220) : 230;
-          const clusterH = isMobile ? 62 : 70;
+          const clusterY = isMobile ? dashY - 18 : dashY - 10;
+          const clusterW = isMobile ? Math.min(width * 0.90, 240) : 260;
+          const clusterH = isMobile ? 66 : 74;
 
           ctx.save();
           ctx.translate(clusterX - clusterW / 2, clusterY);
           
-          ctx.fillStyle = '#10171d';
+          // Cluster Bezel & Frame
+          ctx.fillStyle = '#0a1016';
           ctx.beginPath();
-          ctx.roundRect(-8, -12, clusterW + 16, clusterH + 16, 12);
+          ctx.roundRect(-8, -12, clusterW + 16, clusterH + 18, 14);
           ctx.fill();
-          ctx.strokeStyle = 'rgba(251, 233, 208, 0.25)';
-          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(251, 233, 208, 0.3)';
+          ctx.lineWidth = 1.2;
           ctx.stroke();
 
-          ctx.fillStyle = '#0a1014';
+          // Display Glass
+          const screenGrad = ctx.createLinearGradient(0, -6, 0, clusterH);
+          screenGrad.addColorStop(0, '#0c141a');
+          screenGrad.addColorStop(1, '#060a0d');
+          ctx.fillStyle = screenGrad;
           ctx.beginPath();
           ctx.roundRect(0, -6, clusterW, clusterH, 8);
           ctx.fill();
 
-          // Speedometer (Left Dial) - Real-time Interactive Speed Readout!
+          // 1. SPEEDOMETER (Left Dial)
+          const speedDialX = 36;
+          const speedDialY = clusterH * 0.48;
+          const dialRadius = isMobile ? 22 : 26;
+
+          // Dial background track
+          ctx.beginPath();
+          ctx.arc(speedDialX, speedDialY, dialRadius, Math.PI * 0.75, Math.PI * 2.25);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+          ctx.lineWidth = 3.5;
+          ctx.stroke();
+
+          // Active speed arc (illuminates dynamically!)
+          const speedRatioClamped = Math.min(1.0, currentSpeed / 180);
+          const speedEndAngle = Math.PI * 0.75 + speedRatioClamped * (Math.PI * 1.5);
+          ctx.beginPath();
+          ctx.arc(speedDialX, speedDialY, dialRadius, Math.PI * 0.75, speedEndAngle);
+          ctx.strokeStyle = '#FBE9D0';
+          ctx.lineWidth = 3.5;
+          ctx.stroke();
+
+          // Speed Digital Text
           ctx.fillStyle = '#FBE9D0';
-          ctx.font = isMobile ? 'bold 18px monospace' : 'bold 21px monospace';
-          ctx.fillText(`${Math.round(currentSpeed)}`, 22, 28);
-          ctx.font = '8px sans-serif';
+          ctx.font = isMobile ? 'bold 16px monospace' : 'bold 19px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${Math.round(currentSpeed)}`, speedDialX, speedDialY + (isMobile ? 5 : 6));
+          ctx.font = '7px sans-serif';
           ctx.fillStyle = 'rgba(251, 233, 208, 0.7)';
-          ctx.fillText('KM/H', 24, 40);
+          ctx.fillText('KM/H', speedDialX, speedDialY + (isMobile ? 14 : 16));
 
-          // Tachometer (Right Dial) - Dynamic Engine RPM calculating from throttle & speed!
-          const rpm = Math.round(1400 + (currentSpeed / 150) * 3400 + (isAccelerating ? 750 : 0) + curAudio * 350);
-          ctx.fillStyle = rpm > 4200 ? '#ef4444' : '#E64833';
+          // 2. TACHOMETER (Right Dial)
+          const tachDialX = clusterW - 36;
+          const tachDialY = clusterH * 0.48;
+          const rpm = Math.round(1400 + (currentSpeed / 150) * 3600 + (isAccelerating ? 800 : 0) + curAudio * 300);
+          const rpmRatioClamped = Math.min(1.0, rpm / 8000);
+          const rpmEndAngle = Math.PI * 0.75 + rpmRatioClamped * (Math.PI * 1.5);
+
+          // Tach track
+          ctx.beginPath();
+          ctx.arc(tachDialX, tachDialY, dialRadius, Math.PI * 0.75, Math.PI * 2.25);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+          ctx.lineWidth = 3.5;
+          ctx.stroke();
+
+          // Active RPM arc (turns red at high revs!)
+          ctx.beginPath();
+          ctx.arc(tachDialX, tachDialY, dialRadius, Math.PI * 0.75, rpmEndAngle);
+          ctx.strokeStyle = rpm > 4400 ? '#ef4444' : '#E64833';
+          ctx.lineWidth = 3.5;
+          ctx.stroke();
+
+          // RPM Digital Text
+          ctx.fillStyle = rpm > 4400 ? '#ef4444' : '#E64833';
           ctx.font = isMobile ? 'bold 14px monospace' : 'bold 16px monospace';
-          ctx.fillText(`${rpm}`, clusterW - (isMobile ? 58 : 70), 26);
-          ctx.font = '8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${rpm}`, tachDialX, tachDialY + (isMobile ? 5 : 6));
+          ctx.font = '7px sans-serif';
           ctx.fillStyle = 'rgba(230, 72, 51, 0.75)';
-          ctx.fillText('RPM', clusterW - (isMobile ? 48 : 55), 38);
+          ctx.fillText('RPM', tachDialX, tachDialY + (isMobile ? 14 : 16));
 
-          // Center Status HUD
+          // 3. CENTER DIGITAL TRIP COMPUTER
+          const centerX = clusterW / 2;
+          ctx.textAlign = 'center';
+
+          // Top status pill (Drive mode & Gear)
+          const currentGear = Math.min(7, Math.max(1, Math.floor(currentSpeed / 20) + 1));
           ctx.fillStyle = isAccelerating ? '#22c55e' : isBraking ? '#ef4444' : '#90AEAD';
           ctx.font = 'bold 8px sans-serif';
-          ctx.fillText(isAccelerating ? 'SPORT ACCEL' : isBraking ? 'BRAKE ACTIVE' : 'MERCEDES GT', clusterW / 2 - 28, 20);
+          ctx.fillText(isAccelerating ? 'SPORT ACCEL' : isBraking ? 'BRAKE ACTIVE' : 'SPORT+ MODE', centerX, 13);
+
+          // Gear indicator & Compass
           ctx.fillStyle = '#FBE9D0';
+          ctx.font = 'bold 10px monospace';
+          ctx.fillText(`GEAR D${currentGear} • SW 214°`, centerX, 26);
+
+          // Trip Distance Display (User Request: "show distance moved")
+          ctx.fillStyle = '#34d399';
+          ctx.font = 'bold 10px monospace';
+          ctx.fillText(`TRIP ${totalDistanceKm.toFixed(2)} KM`, centerX, 40);
+
+          // Dynamic Cruise / System status
+          ctx.fillStyle = 'rgba(251, 233, 208, 0.65)';
           ctx.font = '7.5px sans-serif';
-          ctx.fillText('DYNAMIC CRUISE', clusterW / 2 - 30, 32);
+          ctx.fillText('DYNAMIC CRUISE • 24°C', centerX, 52);
 
           ctx.restore();
 
-          // E. INTERACTIVE STEERING WHEEL (Free & Rotating Smoothly with A/D, Arrows, or Touch!)
+          // E. INTERACTIVE AMG PERFORMANCE STEERING WHEEL
           const wheelX = clusterX;
           const wheelY = isMobile ? height * 0.91 + cabinBob : height * 0.88 + cabinBob;
-          const wheelR = isMobile ? Math.min(width * 0.22, 82) : 108;
+          const wheelR = isMobile ? Math.min(width * 0.22, 84) : 110;
+
+          // Turn Signal Stalk behind wheel (left side)
+          ctx.save();
+          ctx.translate(wheelX, wheelY);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-wheelR - 22, -18, 26, 8);
+          ctx.strokeStyle = '#475569';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(-wheelR - 22, -18, 26, 8);
+          ctx.restore();
 
           ctx.save();
           ctx.translate(wheelX, wheelY);
           
           // Physical steering rotation!
-          ctx.rotate(currentSteer * 0.55); // Rotates up to ~32 degrees smoothly!
+          ctx.rotate(currentSteer * 0.55); // Rotates smoothly!
 
-          // Steering Wheel Rim
+          // Dual Brushed Aluminum Paddle Shifters behind wheel
+          const paddleH = wheelR * 0.52;
+          const paddleW = 12;
+          // Left Paddle (-) Downshift
+          ctx.fillStyle = '#94a3b8';
+          ctx.beginPath();
+          ctx.roundRect(-wheelR - 6, -paddleH * 0.6, paddleW, paddleH, 4);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px monospace';
+          ctx.fillText('-', -wheelR + 1, -paddleH * 0.1);
+
+          // Right Paddle (+) Upshift
+          ctx.fillStyle = '#94a3b8';
+          ctx.beginPath();
+          ctx.roundRect(wheelR - paddleW + 6, -paddleH * 0.6, paddleW, paddleH, 4);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px monospace';
+          ctx.fillText('+', wheelR + 1, -paddleH * 0.1);
+
+          // Steering Wheel Outer Rim (Saddle Leather #3e1b12 with Flat-Bottom Sport Shape)
           ctx.beginPath();
           ctx.arc(0, 0, wheelR, 0, Math.PI * 2);
-          ctx.lineWidth = isMobile ? 16 : 22;
-          ctx.strokeStyle = '#422017';
+          ctx.lineWidth = isMobile ? 18 : 24;
+          ctx.strokeStyle = '#3e1b12';
           ctx.stroke();
 
-          // Inner rim trim
+          // Perforated Grip Inlays at 9 and 3 o'clock
           ctx.beginPath();
-          ctx.arc(0, 0, wheelR - (isMobile ? 8 : 10), 0, Math.PI * 2);
-          ctx.lineWidth = 1.5;
-          ctx.strokeStyle = 'rgba(248, 250, 252, 0.25)';
+          ctx.arc(0, 0, wheelR, Math.PI * 0.78, Math.PI * 1.22);
+          ctx.lineWidth = isMobile ? 19 : 25;
+          ctx.strokeStyle = '#220e0a';
           ctx.stroke();
 
-          // 3 Brushed Aluminum Spokes
-          ctx.fillStyle = '#cbd5e1';
-          ctx.fillRect(-wheelR + 8, -8, wheelR * 0.55, isMobile ? 16 : 20);
-          ctx.fillRect(wheelR * 0.35, -8, wheelR * 0.55, isMobile ? 16 : 20);
-          ctx.fillRect(-10, wheelR * 0.3, 20, wheelR * 0.6);
+          ctx.beginPath();
+          ctx.arc(0, 0, wheelR, -Math.PI * 0.22, Math.PI * 0.22);
+          ctx.lineWidth = isMobile ? 19 : 25;
+          ctx.strokeStyle = '#220e0a';
+          ctx.stroke();
 
-          // Center Hub (Airbag & Mercedes Star)
-          const hubR = isMobile ? 30 : 38;
+          // 10-and-2 Ergonomic Thumb Rest Contours
+          ctx.fillStyle = '#2d140d';
+          ctx.beginPath();
+          ctx.ellipse(-wheelR * 0.68, -wheelR * 0.72, 10, 6, -0.7, 0, Math.PI * 2);
+          ctx.ellipse(wheelR * 0.68, -wheelR * 0.72, 10, 6, 0.7, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Inner Chrome Rim Ring
+          ctx.beginPath();
+          ctx.arc(0, 0, wheelR - (isMobile ? 9 : 12), 0, Math.PI * 2);
+          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = 'rgba(248, 250, 252, 0.3)';
+          ctx.stroke();
+
+          // 3 Brushed Satin Chrome Spokes
+          const spokeGrad = ctx.createLinearGradient(-wheelR, -10, wheelR, 10);
+          spokeGrad.addColorStop(0, '#cbd5e1');
+          spokeGrad.addColorStop(0.5, '#f1f5f9');
+          spokeGrad.addColorStop(1, '#94a3b8');
+          ctx.fillStyle = spokeGrad;
+
+          // Left Horizontal Spoke with Touch Controls
+          ctx.fillRect(-wheelR + 10, -9, wheelR * 0.58, isMobile ? 18 : 22);
+          // Right Horizontal Spoke with Touch Controls
+          ctx.fillRect(wheelR * 0.32, -9, wheelR * 0.58, isMobile ? 18 : 22);
+          // Lower Vertical Spoke
+          ctx.fillRect(-11, wheelR * 0.28, 22, wheelR * 0.62);
+
+          // Multi-function Touch Button Pads on Spokes
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-wheelR + 18, -6, 20, 12);
+          ctx.fillRect(wheelR - 38, -6, 20, 12);
+
+          // Button Icons
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '7px sans-serif';
+          ctx.fillText('SET', -wheelR + 21, 3);
+          ctx.fillText('VOL', wheelR - 35, 3);
+
+          // Lower Spoke AMG Silver Badge
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-9, wheelR * 0.55, 18, 8);
+          ctx.fillStyle = '#e2e8f0';
+          ctx.font = 'bold 5.5px sans-serif';
+          ctx.fillText('AMG', -6, wheelR * 0.55 + 6);
+
+          // Center Hub (Airbag Boss & Mercedes Chrome Star)
+          const hubR = isMobile ? 32 : 40;
           ctx.beginPath();
           ctx.arc(0, 0, hubR, 0, Math.PI * 2);
-          ctx.fillStyle = '#2a140e';
+          ctx.fillStyle = '#220e0a';
           ctx.fill();
           ctx.strokeStyle = '#cbd5e1';
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 1.8;
           ctx.stroke();
 
-          // Mercedes Star in center of rotating wheel
-          drawMercedesStar(0, 0, isMobile ? 14 : 18);
+          // Outer hub stitching
+          ctx.beginPath();
+          ctx.arc(0, 0, hubR - 4, 0, Math.PI * 2);
+          ctx.setLineDash([3, 3]);
+          ctx.strokeStyle = 'rgba(251, 233, 208, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // 3D Mercedes-Benz Chrome Star in center of rotating wheel
+          drawMercedesStar(0, 0, isMobile ? 15 : 19);
 
           ctx.restore();
           ctx.restore();
@@ -1176,9 +1459,14 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
         <>
           {/* Desktop HUD Pill */}
           <div className="fixed top-20 right-4 z-30 pointer-events-auto hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl glass-panel text-slate-300 text-xs border border-white/10 shadow-lg animate-in fade-in duration-500">
-            <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300">
+            <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300 font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>{hudSpeed} KM/H</span>
+            </div>
+            <span className="text-white/20">|</span>
+            <div className="flex items-center gap-1 font-mono text-[11px] text-emerald-400 font-semibold">
+              <span className="text-slate-400 text-[10px] font-normal">TRIP</span>
+              <span>{hudDistance.toFixed(2)} KM</span>
             </div>
             <span className="text-white/20">|</span>
             <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
@@ -1190,20 +1478,23 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           </div>
 
           {/* Mobile On-Screen Touch Driving Controls & Speed Badge */}
-          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 sm:hidden flex items-center gap-2 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 shadow-md">
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 sm:hidden flex items-center gap-2 px-3.5 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/15 shadow-md">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="font-mono text-xs font-semibold text-amber-300">{hudSpeed} KM/H</span>
-            <span className="text-[10px] text-slate-400 uppercase font-mono">Mercedes GT</span>
+            <span className="text-white/25">|</span>
+            <span className="font-mono text-xs text-emerald-400 font-semibold">{hudDistance.toFixed(2)} KM</span>
+            <span className="text-white/25">|</span>
+            <span className="text-[10px] text-slate-300 uppercase font-mono">AMG GT</span>
           </div>
 
-          {/* Mobile Touch Steering (Bottom Left) */}
-          <div className="fixed bottom-24 left-3 z-30 sm:hidden flex items-center gap-2 pointer-events-auto select-none">
+          {/* Mobile Touch Steering (Bottom Left - Above Player Bar) */}
+          <div className="fixed bottom-20 left-3 z-30 sm:hidden flex items-center gap-2 pointer-events-auto select-none">
             <button
               onTouchStart={() => { touchControlsRef.current.steerLeft = true; }}
               onTouchEnd={() => { touchControlsRef.current.steerLeft = false; }}
               onMouseDown={() => { touchControlsRef.current.steerLeft = true; }}
               onMouseUp={() => { touchControlsRef.current.steerLeft = false; }}
-              className="w-12 h-12 rounded-2xl bg-black/65 active:bg-emerald-500/30 backdrop-blur-xl border border-white/20 shadow-xl flex items-center justify-center text-white text-base font-bold transition-all active:scale-95"
+              className="w-11 h-11 rounded-2xl bg-black/70 active:bg-emerald-500/35 backdrop-blur-xl border border-white/20 shadow-xl flex items-center justify-center text-white text-base font-bold transition-all active:scale-90"
               aria-label="Steer Left"
             >
               ◀
@@ -1213,21 +1504,21 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
               onTouchEnd={() => { touchControlsRef.current.steerRight = false; }}
               onMouseDown={() => { touchControlsRef.current.steerRight = true; }}
               onMouseUp={() => { touchControlsRef.current.steerRight = false; }}
-              className="w-12 h-12 rounded-2xl bg-black/65 active:bg-emerald-500/30 backdrop-blur-xl border border-white/20 shadow-xl flex items-center justify-center text-white text-base font-bold transition-all active:scale-95"
+              className="w-11 h-11 rounded-2xl bg-black/70 active:bg-emerald-500/35 backdrop-blur-xl border border-white/20 shadow-xl flex items-center justify-center text-white text-base font-bold transition-all active:scale-90"
               aria-label="Steer Right"
             >
               ▶
             </button>
           </div>
 
-          {/* Mobile Touch Pedals: Brake & Gas (Bottom Right) */}
-          <div className="fixed bottom-24 right-3 z-30 sm:hidden flex items-center gap-2 pointer-events-auto select-none">
+          {/* Mobile Touch Pedals: Brake & Gas (Bottom Right - Above Player Bar) */}
+          <div className="fixed bottom-20 right-3 z-30 sm:hidden flex items-center gap-2 pointer-events-auto select-none">
             <button
               onTouchStart={() => { touchControlsRef.current.brake = true; }}
               onTouchEnd={() => { touchControlsRef.current.brake = false; }}
               onMouseDown={() => { touchControlsRef.current.brake = true; }}
               onMouseUp={() => { touchControlsRef.current.brake = false; }}
-              className="w-12 h-12 rounded-2xl bg-black/65 active:bg-rose-500/30 backdrop-blur-xl border border-rose-500/30 shadow-xl flex items-center justify-center text-rose-400 text-xs font-mono font-bold transition-all active:scale-95"
+              className="w-11 h-11 rounded-2xl bg-black/70 active:bg-rose-500/35 backdrop-blur-xl border border-rose-500/35 shadow-xl flex items-center justify-center text-rose-400 text-[11px] font-mono font-bold transition-all active:scale-90"
               aria-label="Brake"
             >
               STOP
@@ -1237,7 +1528,7 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
               onTouchEnd={() => { touchControlsRef.current.accelerate = false; }}
               onMouseDown={() => { touchControlsRef.current.accelerate = true; }}
               onMouseUp={() => { touchControlsRef.current.accelerate = false; }}
-              className="w-12 h-12 rounded-2xl bg-black/65 active:bg-emerald-500/30 backdrop-blur-xl border border-emerald-500/30 shadow-xl flex items-center justify-center text-emerald-400 text-xs font-mono font-bold transition-all active:scale-95"
+              className="w-11 h-11 rounded-2xl bg-black/70 active:bg-emerald-500/35 backdrop-blur-xl border border-emerald-500/35 shadow-xl flex items-center justify-center text-emerald-400 text-[11px] font-mono font-bold transition-all active:scale-90"
               aria-label="Gas / Accelerate"
             >
               GAS

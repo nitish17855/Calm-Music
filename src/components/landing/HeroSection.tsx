@@ -1,422 +1,304 @@
 "use client";
 
-import React, { useState } from 'react';
-import Link from 'next/link';
-import { useMood, MOOD_CONFIGS } from '@/context/MoodContext';
+import React, { useState, useEffect } from 'react';
+import { useMood } from '@/context/MoodContext';
 import { usePlayer } from '@/context/PlayerContext';
-import { MoodMode, Track } from '@/types';
+import { Track } from '@/types';
+import { formatTime } from '@/lib/utils';
+import Image from 'next/image';
 import {
+  Search as SearchIcon,
   Play,
   Pause,
-  Sparkles,
-  Moon,
-  CloudRain,
-  Compass,
+  Plus,
   Heart,
-  Car,
-  ArrowRight,
-  ShieldCheck,
-  Headphones,
-  Zap,
-  Radio,
-  Flame,
-  Volume2,
-  Search,
+  Check,
+  Loader2,
+  Eye,
+  EyeOff,
+  X,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
-import CustomAudioModal from '@/components/player/CustomAudioModal';
 
-const SCENIC_JOURNEYS: {
-  title: string;
-  artist: string;
-  mood: MoodMode;
-  coverUrl: string;
-  duration: number;
-  audioUrl: string;
-}[] = [
-  {
-    title: 'Midnight Highway Cruise',
-    artist: 'Night Drive Sessions',
-    mood: 'drive',
-    coverUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=400&q=80',
-    duration: 220,
-    audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=1885440&format=mp31&from=app-56d30c95',
-  },
-  {
-    title: 'Rain on the Windshield',
-    artist: 'Zen Sanctuary',
-    mood: 'rain',
-    coverUrl: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&w=400&q=80',
-    duration: 215,
-    audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=1886257&format=mp31&from=app-56d30c95',
-  },
-  {
-    title: 'Sunset Rose Reverie',
-    artist: 'Velvet Horizon',
-    mood: 'rose',
-    coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=400&q=80',
-    duration: 210,
-    audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=1885437&format=mp31&from=app-56d30c95',
-  },
-  {
-    title: 'Emerald Canopy Stillness',
-    artist: 'Verdant Mind',
-    mood: 'focus',
-    coverUrl: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=400&q=80',
-    duration: 242,
-    audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=1888439&format=mp31&from=app-56d30c95',
-  },
+const QUICK_MOOD_PROMPTS = [
+  'Chill Lo-Fi',
+  'Night Drive Synth',
+  'Gentle Rain & Piano',
+  'Deep Meditation',
+  'Ambient Guitar',
 ];
 
 export default function HeroSection() {
-  const { mood, setMood, config } = useMood();
-  const { isPlaying, togglePlay, playTrack, currentTrack } = usePlayer();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { config, mood } = useMood();
+  const { currentTrack, isPlaying, playTrack, addToQueue } = usePlayer();
 
-  const moodsList: MoodMode[] = ['drive', 'rose', 'night', 'rain', 'focus'];
+  const [query, setQuery] = useState('');
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [addedTrackId, setAddedTrackId] = useState<string | null>(null);
+  const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(new Set());
+  const [isResultsHidden, setIsResultsHidden] = useState(false);
 
-  const handleLaunchJourney = (journey: typeof SCENIC_JOURNEYS[0]) => {
-    setMood(journey.mood);
-    const track: Track = {
-      id: `journey-${journey.title.toLowerCase().replace(/\s+/g, '-')}`,
-      title: journey.title,
-      artistName: journey.artist,
-      duration: journey.duration,
-      audioUrl: journey.audioUrl,
-      coverUrl: journey.coverUrl,
-      source: 'jamendo',
-    };
-    playTrack(track);
+  // Load liked tracks from browser localStorage (No Auth Required)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('calm_music_likes');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setLikedTrackIds(new Set(parsed));
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  // Save liked tracks to browser localStorage
+  const toggleLike = (trackId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextSet = new Set(likedTrackIds);
+    if (nextSet.has(trackId)) {
+      nextSet.delete(trackId);
+    } else {
+      nextSet.add(trackId);
+    }
+    setLikedTrackIds(nextSet);
+    try {
+      localStorage.setItem('calm_music_likes', JSON.stringify(Array.from(nextSet)));
+    } catch (e) {}
+  };
+
+  // Debounced live music search
+  useEffect(() => {
+    if (!query.trim()) {
+      setTracks([]);
+      setLoading(false);
+      return;
+    }
+
+    const handler = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ q: query.trim() });
+        const res = await fetch(`/api/music/search?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          setTracks(data.tracks || []);
+          setIsResultsHidden(false);
+        }
+      } catch (err) {
+        console.error('Search error:', err);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(handler);
+  }, [query]);
+
+  const handleAddToQueue = (track: Track, e: React.MouseEvent) => {
+    e.stopPropagation();
+    addToQueue(track);
+    setAddedTrackId(track.id);
+    setTimeout(() => setAddedTrackId(null), 1200);
   };
 
   return (
-    <div className="relative pt-20 md:pt-32 pb-24 px-4 md:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
+    <div className="relative pt-24 sm:pt-28 pb-32 px-3 sm:px-6 max-w-4xl mx-auto flex flex-col items-center">
       
       {/* ------------------------------------------------------------- */}
-      {/* MOBILE FULL-SCREEN DRIVE HUD (md:hidden) - Zero Windshield Clutter */}
+      {/* FLOATING DIRECT SEARCH BAR                                    */}
       {/* ------------------------------------------------------------- */}
-      <div className="w-full max-w-sm mx-auto flex flex-col items-center gap-3 mb-6 md:hidden">
-        {/* Sleek Direct Search Bar Trigger */}
-        <Link
-          href="/search"
-          className="w-full flex items-center justify-between px-4 py-3 rounded-2xl glass-panel border border-white/20 text-slate-200 text-xs shadow-2xl backdrop-blur-2xl transition-all active:scale-98"
-        >
-          <span className="flex items-center gap-2.5">
-            <Search className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-300 font-medium">Search ANY song or artist...</span>
-          </span>
-          <span
-            className="text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold uppercase"
-            style={{ backgroundColor: `${config.accentColor}30`, color: config.accentColor }}
-          >
-            Play
-          </span>
-        </Link>
-
-        {/* Ambient Atmosphere Status */}
-        <div className="flex items-center gap-2 text-[11px] text-slate-300 font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Atmosphere: <strong className="capitalize text-white">{mood}</strong></span>
-        </div>
-      </div>
-
-      {/* ------------------------------------------------------------- */}
-      {/* DESKTOP HERO SECTION (hidden md:flex)                          */}
-      {/* ------------------------------------------------------------- */}
-      <div className="hidden md:flex flex-col items-center text-center w-full">
-        {/* Dynamic Glowing Pill Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6 glass-pill"
-          style={{
-            borderColor: `${config.accentColor}40`,
-            color: config.accentColor,
-          }}
-        >
-          <Car className="w-3.5 h-3.5" />
-          <span>Late-Night Scenic Jungle Drive & Ambient Audio Experience</span>
-        </motion.div>
-
-        {/* Main Hero Title */}
-        <motion.h1
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1 }}
-          className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white max-w-5xl leading-[1.12]"
-        >
-          Soundscapes for <br />
-          <span
-            className="bg-clip-text text-transparent transition-all duration-700"
+      <div className="w-full max-w-2xl relative z-20">
+        <div className="relative flex items-center">
+          <SearchIcon className="absolute left-4 w-5 h-5 text-slate-400" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search any song, artist, or ambient vibe..."
+            className="w-full pl-12 pr-24 py-3.5 sm:py-4 rounded-2xl sm:rounded-3xl glass-panel text-white placeholder-slate-400 text-sm sm:text-base border border-white/20 shadow-2xl focus:outline-none focus:ring-2 backdrop-blur-2xl transition-all"
             style={{
-              backgroundImage: `linear-gradient(135deg, #ffffff 25%, ${config.accentColor} 100%)`,
+              borderColor: `${config.accentColor}50`,
             }}
-          >
-            Midnight Drives & Serenity
-          </span>
-        </motion.h1>
+          />
 
-        {/* Subtitle */}
-        <motion.p
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="mt-6 text-base sm:text-lg text-slate-300 max-w-2xl font-normal leading-relaxed"
-        >
-          Cruise through a vast misty jungle as living headlights illuminate your path, or sink into calming rain and sunset hues. Search and stream **any song in the world** with live rhythmic equalizer bars.
-        </motion.p>
-
-        {/* Real-time Equalizer Audio Preview Bar */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.7, delay: 0.25 }}
-          className="mt-8 p-3 rounded-2xl glass-panel inline-flex items-center gap-3.5 border border-white/10 shadow-xl"
-        >
-          <button
-            onClick={togglePlay}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95 shadow-md"
-            style={{ backgroundColor: config.accentColor }}
-            title={isPlaying ? 'Pause music' : 'Start music'}
-          >
-            {isPlaying ? (
-              <Pause className="w-4 h-4 fill-white" />
-            ) : (
-              <Play className="w-4 h-4 fill-white ml-0.5" />
+          <div className="absolute right-3 flex items-center gap-1.5">
+            {loading && (
+              <Loader2 className="w-4 h-4 text-slate-400 animate-spin mr-1" />
             )}
-          </button>
-
-          <div className="flex flex-col text-left">
-            <span className="text-xs font-semibold text-white">
-              {currentTrack?.title || 'Ambient Frequency Spectrum'}
-            </span>
-            <span className="text-[10px] text-slate-400">
-              {isPlaying ? 'Live 60 FPS audio-reactive waves' : 'Click to feel the rhythm'}
-            </span>
+            {query && (
+              <button
+                onClick={() => {
+                  setQuery('');
+                  setTracks([]);
+                }}
+                className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-white/10"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-
-          <div className="pl-3 border-l border-white/10">
-            <AudioVisualizerBars barCount={16} height={28} />
-          </div>
-        </motion.div>
-
-        {/* Action Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.3 }}
-          className="mt-8 flex flex-wrap items-center justify-center gap-4"
-        >
-          <Link
-            href="/search"
-            className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl font-medium text-white shadow-lg transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            style={{
-              backgroundColor: config.accentColor,
-              boxShadow: `0 10px 25px -5px ${config.accentColor}60`,
-            }}
-          >
-            <Play className="w-4 h-4 fill-white" />
-            <span>Search & Play Any Song</span>
-          </Link>
-
-          {/* Start Scenic Jungle Drive Action */}
-          <button
-            onClick={() => {
-              setMood('drive');
-              if (!isPlaying) togglePlay();
-            }}
-            className="flex items-center gap-2 px-6 py-3.5 rounded-2xl font-medium text-slate-200 glass-pill hover:text-white transition-all"
-          >
-            <Car className="w-4 h-4 text-emerald-400" />
-            <span>Start Scenic Jungle Drive</span>
-          </button>
-
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3.5 rounded-2xl font-medium text-slate-300 glass-pill hover:text-white transition-all"
-          >
-            <Radio className="w-4 h-4" />
-            <span>Stream Audio from Anywhere</span>
-          </button>
-        </motion.div>
-      </div>
-
-      {/* Featured Scenic Soundscape Journeys */}
-      <section className="w-full mt-24 text-left">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">Curated Scenic Journeys</h2>
-            <p className="text-sm text-slate-400 mt-1">
-              One-click immersive soundscapes synced directly with dynamic environment visuals.
-            </p>
-          </div>
-          <span className="text-xs font-mono uppercase text-slate-400">
-            Selected: <strong className="text-white capitalize">{mood}</strong>
-          </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {SCENIC_JOURNEYS.map((j) => {
-            const isCurrent = currentTrack?.title === j.title;
-            const moodCfg = MOOD_CONFIGS[j.mood];
-
-            return (
-              <div
-                key={j.title}
-                onClick={() => handleLaunchJourney(j)}
-                className={`group p-4 rounded-3xl glass-panel glass-panel-hover cursor-pointer border flex flex-col justify-between transition-all duration-300 ${
-                  isCurrent ? 'ring-2 ring-white/20' : 'border-white/5'
-                }`}
+        {/* Quick Vibe Chips (Click to Search Instantly) */}
+        {!query && (
+          <div className="flex items-center justify-center gap-1.5 sm:gap-2 mt-3 overflow-x-auto pb-1 scrollbar-none">
+            {QUICK_MOOD_PROMPTS.map((prompt) => (
+              <button
+                key={prompt}
+                onClick={() => setQuery(prompt)}
+                className="px-3 py-1 rounded-full text-[11px] sm:text-xs font-medium text-slate-300 hover:text-white glass-pill border border-white/10 hover:border-white/25 transition-all whitespace-nowrap active:scale-95"
               >
-                <div>
-                  <div className="relative aspect-video w-full rounded-2xl overflow-hidden mb-3.5 bg-slate-800">
-                    <img
-                      src={j.coverUrl}
-                      alt={j.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div
-                      className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg"
-                        style={{ backgroundColor: moodCfg.accentColor }}
-                      >
-                        <Play className="w-4 h-4 fill-white ml-0.5" />
+                {prompt}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* SEARCH RESULTS DROPDOWN / LIST (Clean, Fast & Non-Intrusive)  */}
+      {/* ------------------------------------------------------------- */}
+      {query && tracks.length > 0 && (
+        <div className="w-full max-w-2xl mt-4 relative z-20 transition-all duration-300">
+          
+          {/* Header with Hide/Show Toggle */}
+          <div className="flex items-center justify-between px-2 mb-2">
+            <span className="text-xs font-mono text-slate-400">
+              {tracks.length} soundscapes found
+            </span>
+            <button
+              onClick={() => setIsResultsHidden((prev) => !prev)}
+              className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white glass-pill px-2.5 py-1 rounded-xl"
+            >
+              {isResultsHidden ? (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Show Results</span>
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Scenic Mode (Hide)</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {!isResultsHidden && (
+            <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1 scrollbar-thin rounded-2xl glass-panel p-2 border border-white/15 shadow-2xl backdrop-blur-2xl">
+              {tracks.map((track) => {
+                const isCurrent = currentTrack?.id === track.id;
+                const isLiked = likedTrackIds.has(track.id);
+
+                return (
+                  <div
+                    key={track.id}
+                    onClick={() => playTrack(track, tracks)}
+                    className={`group p-2.5 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                      isCurrent
+                        ? 'bg-white/15 text-white ring-1 ring-white/20'
+                        : 'bg-black/40 hover:bg-white/10 text-slate-200'
+                    }`}
+                  >
+                    {/* Left: Artwork & Metadata */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="relative w-11 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-slate-800 shadow">
+                        <Image
+                          src={track.coverUrl}
+                          alt={track.title}
+                          fill
+                          sizes="44px"
+                          className="object-cover"
+                        />
+                        <div
+                          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${
+                            isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          }`}
+                        >
+                          {isCurrent && isPlaying ? (
+                            <Pause className="w-4 h-4 fill-white text-white" />
+                          ) : (
+                            <Play className="w-4 h-4 fill-white text-white ml-0.5" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4
+                            className={`text-xs sm:text-sm font-semibold truncate ${
+                              isCurrent ? 'text-white' : 'text-slate-200'
+                            }`}
+                            style={{ color: isCurrent ? config.accentColor : undefined }}
+                          >
+                            {track.title}
+                          </h4>
+                          {isCurrent && isPlaying && (
+                            <AudioVisualizerBars barCount={5} height={12} compact />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                          {track.artistName}
+                        </p>
                       </div>
                     </div>
+
+                    {/* Right: Duration, Like & Add to Queue */}
+                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                      <span className="text-[10px] font-mono text-slate-400 hidden sm:inline">
+                        {formatTime(track.duration)}
+                      </span>
+
+                      {/* Favorite Button (Saved to localStorage) */}
+                      <button
+                        onClick={(e) => toggleLike(track.id, e)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          isLiked
+                            ? 'text-rose-400'
+                            : 'text-slate-400 hover:text-white hover:bg-white/10'
+                        }`}
+                        title={isLiked ? 'Unlike' : 'Save to Favorites'}
+                      >
+                        <Heart className={`w-4 h-4 ${isLiked ? 'fill-rose-500' : ''}`} />
+                      </button>
+
+                      {/* Add to Queue Button (Saved to localStorage) */}
+                      <button
+                        onClick={(e) => handleAddToQueue(track, e)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-white/5 hover:bg-white/15 border border-white/10 transition-all active:scale-95"
+                        title="Add to play queue"
+                      >
+                        {addedTrackId === track.id ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-emerald-400 text-[11px]">Added</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Queue</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-
-                  <span
-                    className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full font-semibold mb-2 inline-block"
-                    style={{
-                      backgroundColor: `${moodCfg.accentColor}20`,
-                      color: moodCfg.accentColor,
-                      border: `1px solid ${moodCfg.accentColor}40`,
-                    }}
-                  >
-                    {moodCfg.name}
-                  </span>
-
-                  <h3 className="text-sm font-semibold text-white tracking-tight truncate">{j.title}</h3>
-                  <p className="text-xs text-slate-400 truncate mt-0.5">{j.artist}</p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Scenic Route</span>
-                  <span className="font-mono text-slate-200">Play Now →</span>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
-      </section>
+      )}
 
-      {/* Interactive Mood Explorer Modes */}
-      <section id="mood-explorer" className="w-full mt-24 text-left">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white tracking-tight">Active Living Environments</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Choose your scenic atmosphere. Speed is kept steady and natural to prevent eye strain, while rain brings brisk precipitation.
+      {/* When no query is typed: Pure Unobstructed View */}
+      {!query && (
+        <div className="mt-8 text-center pointer-events-none select-none">
+          <p className="text-xs sm:text-sm font-medium text-white/50 tracking-wider">
+            Type any song above • Or cruise freely with steering & speed controls
           </p>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {moodsList.map((m) => {
-            const item = MOOD_CONFIGS[m];
-            const isSelected = mood === m;
-
-            return (
-              <button
-                key={m}
-                onClick={() => setMood(m)}
-                className={`relative text-left p-5 rounded-3xl glass-panel glass-panel-hover overflow-hidden transition-all duration-300 ${
-                  isSelected ? 'ring-2 ring-offset-2 ring-offset-black' : 'opacity-85 hover:opacity-100'
-                }`}
-                style={{
-                  boxShadow: isSelected ? `0 0 0 2px ${item.accentColor}` : undefined,
-                }}
-              >
-                <div
-                  className="absolute -top-16 -right-16 w-36 h-36 rounded-full blur-3xl opacity-30 pointer-events-none transition-all duration-500"
-                  style={{ backgroundColor: item.accentColor }}
-                />
-
-                <div className="flex items-center justify-between mb-4">
-                  <div
-                    className="w-11 h-11 rounded-2xl flex items-center justify-center"
-                    style={{
-                      background: `linear-gradient(135deg, ${item.accentColor}30, ${item.accentColor}10)`,
-                      border: `1px solid ${item.accentColor}50`,
-                    }}
-                  >
-                    {m === 'drive' && <Car className="w-5 h-5 text-emerald-400" />}
-                    {m === 'rose' && <Heart className="w-5 h-5 text-rose-400" />}
-                    {m === 'night' && <Moon className="w-5 h-5 text-indigo-400" />}
-                    {m === 'rain' && <CloudRain className="w-5 h-5 text-sky-400" />}
-                    {m === 'focus' && <Compass className="w-5 h-5 text-emerald-400" />}
-                  </div>
-
-                  {isSelected && (
-                    <span
-                      className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full"
-                      style={{
-                        backgroundColor: `${item.accentColor}25`,
-                        color: item.accentColor,
-                        border: `1px solid ${item.accentColor}40`,
-                      }}
-                    >
-                      Active
-                    </span>
-                  )}
-                </div>
-
-                <h3 className="text-base font-semibold text-white tracking-tight mb-1">{item.name}</h3>
-                <p className="text-xs text-slate-300 font-medium mb-2 line-clamp-1">{item.tagline}</p>
-                <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-3">{item.description}</p>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Agency Standards & Engineering Badges */}
-      <section className="w-full mt-24 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 text-left">
-        <div className="p-6 rounded-3xl glass-panel">
-          <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center mb-4 text-emerald-400">
-            <Car className="w-5 h-5" />
-          </div>
-          <h4 className="text-base font-semibold text-white mb-1.5">Atmospheric Scenic Canvas</h4>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Live 60 FPS perspective cruiser winding through vast misty jungle canopies with realistic glowing headlight cones and tail illumination.
-          </p>
-        </div>
-
-        <div className="p-6 rounded-3xl glass-panel">
-          <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center mb-4 text-rose-400">
-            <Zap className="w-5 h-5" />
-          </div>
-          <h4 className="text-base font-semibold text-white mb-1.5">Gentle Audio Reactivity</h4>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Music energy pulses soft light and equalizer bars without dizzying acceleration, preserving eye comfort and mindfulness.
-          </p>
-        </div>
-
-        <div className="p-6 rounded-3xl glass-panel sm:col-span-2 lg:col-span-1">
-          <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center mb-4 text-indigo-400">
-            <Headphones className="w-5 h-5" />
-          </div>
-          <h4 className="text-base font-semibold text-white mb-1.5">Universal Track Search</h4>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Instant search across YouTube Music, Audius, Jamendo, or drop any local audio file directly into the player.
-          </p>
-        </div>
-      </section>
-
-      {/* Custom Stream & File Drop Modal */}
-      <CustomAudioModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      )}
 
     </div>
   );

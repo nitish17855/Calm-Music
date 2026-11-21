@@ -17,7 +17,6 @@ interface PlayerContextType {
   queueIndex: number;
   audioEnergy: number;
   frequencyData: number[];
-  isVideoExpanded: boolean;
 
   playTrack: (track: Track, newQueue?: Track[]) => void;
   playCustomStream: (url: string, title?: string, artist?: string) => void;
@@ -33,17 +32,9 @@ interface PlayerContextType {
   addToQueue: (track: Track) => void;
   removeFromQueue: (index: number) => void;
   clearQueue: () => void;
-  toggleVideoExpanded: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
-
-declare global {
-  interface Window {
-    YT: any;
-    onYouTubeIframeAPIReady: any;
-  }
-}
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(CURATED_AMBIENT_TRACKS[0]);
@@ -58,7 +49,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [queueIndex, setQueueIndex] = useState<number>(0);
   const [audioEnergy, setAudioEnergy] = useState<number>(0);
   const [frequencyData, setFrequencyData] = useState<number[]>(new Array(16).fill(0.1));
-  const [isVideoExpanded, setIsVideoExpanded] = useState<boolean>(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -66,88 +56,29 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // YouTube IFrame Player refs
-  const ytPlayerRef = useRef<any>(null);
-  const isYtReadyRef = useRef<boolean>(false);
-  const ytPollIntervalRef = useRef<any>(null);
-
-  // Load YouTube IFrame API script once
+  // Load Queue & Current Track from browser localStorage
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
-
-      window.onYouTubeIframeAPIReady = () => {
-        initYouTubePlayer();
-      };
-    } else if (window.YT && window.YT.Player) {
-      initYouTubePlayer();
-    }
-
-    function initYouTubePlayer() {
-      if (ytPlayerRef.current) return;
-      try {
-        ytPlayerRef.current = new window.YT.Player('calm-yt-player', {
-          height: '100%',
-          width: '100%',
-          playerVars: {
-            playsinline: 1,
-            controls: 0,
-            disablekb: 1,
-            modestbranding: 1,
-            rel: 0,
-            origin: window.location.origin,
-          },
-          events: {
-            onReady: () => {
-              isYtReadyRef.current = true;
-              ytPlayerRef.current.setVolume(volume * 100);
-            },
-            onStateChange: (event: any) => {
-              // 1 = playing, 2 = paused, 0 = ended
-              if (event.data === 1) {
-                setIsPlaying(true);
-              } else if (event.data === 2) {
-                setIsPlaying(false);
-              } else if (event.data === 0) {
-                nextTrack();
-              }
-            },
-          },
-        });
-      } catch (err) {
-        console.warn('YT init notice:', err);
-      }
-    }
-
-    return () => {
-      if (ytPollIntervalRef.current) clearInterval(ytPollIntervalRef.current);
-    };
-  }, [volume]);
-
-  // Track YouTube player progress
-  useEffect(() => {
-    if (currentTrack?.source === 'youtube' && isPlaying) {
-      ytPollIntervalRef.current = setInterval(() => {
-        if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
-          const curr = ytPlayerRef.current.getCurrentTime() || 0;
-          const dur = ytPlayerRef.current.getDuration() || currentTrack.duration;
-          setCurrentTime(curr);
-          if (dur > 0) setDuration(dur);
+    try {
+      const savedQueue = localStorage.getItem('calm_music_queue');
+      if (savedQueue) {
+        const parsed = JSON.parse(savedQueue);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setQueue(parsed);
+          setCurrentTrack(parsed[0]);
+          if (parsed[0].duration) setDuration(parsed[0].duration);
         }
-      }, 500);
-    } else {
-      if (ytPollIntervalRef.current) clearInterval(ytPollIntervalRef.current);
-    }
+      }
+    } catch (e) {}
+  }, []);
 
-    return () => {
-      if (ytPollIntervalRef.current) clearInterval(ytPollIntervalRef.current);
-    };
-  }, [currentTrack, isPlaying]);
+  // Save Queue to browser localStorage
+  useEffect(() => {
+    try {
+      if (queue.length > 0) {
+        localStorage.setItem('calm_music_queue', JSON.stringify(queue));
+      }
+    } catch (e) {}
+  }, [queue]);
 
   // Initialize Web Audio API Analyser
   const initAudioContext = useCallback(() => {
@@ -182,7 +113,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
 
     const updateVisualizer = () => {
-      if (currentTrack?.source !== 'youtube' && analyserRef.current) {
+      if (analyserRef.current) {
         const bufferLength = analyserRef.current.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         analyserRef.current.getByteFrequencyData(dataArray);
@@ -201,7 +132,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setAudioEnergy(avg);
         setFrequencyData(bars);
       } else {
-        // Procedural rhythmic wave for YouTube or restricted streams
         const t = Date.now() / 250;
         const simulated = Array.from({ length: 16 }, (_, i) => {
           return 0.15 + Math.abs(Math.sin(t + i * 0.4)) * 0.7;
@@ -217,7 +147,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isPlaying, currentTrack]);
+  }, [isPlaying]);
 
   // Handle Play Track
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
@@ -238,46 +168,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    // Branch: YouTube vs Native HTML5 Audio
-    if (track.source === 'youtube' && track.youtubeId) {
-      // Pause HTML5 audio
-      if (audioRef.current) {
-        audioRef.current.pause();
+    if (audioRef.current) {
+      initAudioContext();
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
       }
-
-      if (ytPlayerRef.current && isYtReadyRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
-        ytPlayerRef.current.loadVideoById(track.youtubeId);
-        ytPlayerRef.current.playVideo();
+      audioRef.current.src = track.audioUrl;
+      audioRef.current.play().then(() => {
         setIsPlaying(true);
-      } else {
-        // Retry shortly if API is still booting
-        setTimeout(() => {
-          if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
-            ytPlayerRef.current.loadVideoById(track.youtubeId);
-            ytPlayerRef.current.playVideo();
-            setIsPlaying(true);
-          }
-        }, 1000);
-      }
-    } else {
-      // Pause YouTube player if active
-      if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === 'function') {
-        ytPlayerRef.current.pauseVideo();
-      }
-
-      if (audioRef.current) {
-        initAudioContext();
-        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-          audioContextRef.current.resume();
-        }
-        audioRef.current.src = track.audioUrl;
-        audioRef.current.play().then(() => {
-          setIsPlaying(true);
-        }).catch((e) => {
-          console.warn('Playback error / Autoplay prevented:', e);
-          setIsPlaying(false);
-        });
-      }
+      }).catch((e) => {
+        console.warn('Playback notice:', e);
+        setIsPlaying(false);
+      });
     }
   }, [initAudioContext]);
 
@@ -312,56 +214,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [playTrack]);
 
   const togglePlay = useCallback(() => {
-    if (currentTrack?.source === 'youtube') {
-      if (!ytPlayerRef.current) return;
-      if (isPlaying) {
-        ytPlayerRef.current.pauseVideo();
-        setIsPlaying(false);
-      } else {
-        ytPlayerRef.current.playVideo();
-        setIsPlaying(true);
-      }
-    } else {
-      if (!audioRef.current) return;
-      initAudioContext();
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
-      }
+    if (!audioRef.current) return;
+    initAudioContext();
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
 
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        if (!audioRef.current.src && currentTrack) {
-          audioRef.current.src = currentTrack.audioUrl;
-        }
-        audioRef.current.play().then(() => {
-          setIsPlaying(true);
-        }).catch((err) => {
-          console.warn('Audio play error:', err);
-        });
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      if (!audioRef.current.src && currentTrack) {
+        audioRef.current.src = currentTrack.audioUrl;
       }
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch((err) => {
+        console.warn('Audio play error:', err);
+      });
     }
   }, [isPlaying, currentTrack, initAudioContext]);
 
   const seek = useCallback((seconds: number) => {
-    if (currentTrack?.source === 'youtube') {
-      if (ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === 'function') {
-        ytPlayerRef.current.seekTo(seconds, true);
-        setCurrentTime(seconds);
-      }
-    } else if (audioRef.current) {
+    if (audioRef.current) {
       audioRef.current.currentTime = seconds;
       setCurrentTime(seconds);
     }
-  }, [currentTrack]);
+  }, []);
 
   const setVolume = useCallback((val: number) => {
     const clamped = Math.max(0, Math.min(1, val));
     setVolumeState(clamped);
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === 'function') {
-      ytPlayerRef.current.setVolume(clamped * 100);
-    }
     if (audioRef.current) {
       audioRef.current.volume = clamped;
     }
@@ -372,17 +255,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const toggleMute = useCallback(() => {
     if (isMuted) {
-      if (ytPlayerRef.current && typeof ytPlayerRef.current.unMute === 'function') {
-        ytPlayerRef.current.unMute();
-      }
       if (audioRef.current) {
         audioRef.current.volume = volume;
       }
       setIsMuted(false);
     } else {
-      if (ytPlayerRef.current && typeof ytPlayerRef.current.mute === 'function') {
-        ytPlayerRef.current.mute();
-      }
       if (audioRef.current) {
         audioRef.current.volume = 0;
       }
@@ -461,10 +338,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentTrack]);
 
-  const toggleVideoExpanded = useCallback(() => {
-    setIsVideoExpanded((prev) => !prev);
-  }, []);
-
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -520,7 +393,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         queueIndex,
         audioEnergy,
         frequencyData,
-        isVideoExpanded,
         playTrack,
         playCustomStream,
         playLocalFile,
@@ -535,21 +407,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         addToQueue,
         removeFromQueue,
         clearQueue,
-        toggleVideoExpanded,
       }}
     >
-      {/* Persistent HTML5 Audio for Jamendo / Audius / Local audio */}
+      {/* Persistent HTML5 Audio for pure high-quality streaming */}
       <audio
         ref={audioRef}
         crossOrigin="anonymous"
         preload="metadata"
         onTimeUpdate={() => {
-          if (audioRef.current && currentTrack?.source !== 'youtube') {
+          if (audioRef.current) {
             setCurrentTime(audioRef.current.currentTime);
           }
         }}
         onDurationChange={() => {
-          if (audioRef.current && currentTrack?.source !== 'youtube' && !isNaN(audioRef.current.duration)) {
+          if (audioRef.current && !isNaN(audioRef.current.duration)) {
             setDuration(audioRef.current.duration);
           }
         }}
@@ -564,17 +435,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           }
         }}
       />
-
-      {/* Docked YouTube IFrame Player */}
-      <div
-        className={`fixed z-50 transition-all duration-300 overflow-hidden shadow-2xl rounded-2xl border border-white/10 ${
-          currentTrack?.source === 'youtube' && isVideoExpanded
-            ? 'bottom-28 right-4 w-80 sm:w-96 aspect-video opacity-100 pointer-events-auto bg-black'
-            : 'bottom-0 right-0 w-1 h-1 opacity-0 pointer-events-none'
-        }`}
-      >
-        <div id="calm-yt-player" className="w-full h-full" />
-      </div>
 
       {children}
     </PlayerContext.Provider>

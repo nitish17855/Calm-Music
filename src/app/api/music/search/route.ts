@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { searchYouTube, searchJamendo, getJamendoByTag, searchAudius, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
+import { searchJamendo, getJamendoByTag, searchAudius, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
 import { Track } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -8,35 +8,24 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q')?.trim() || '';
   const tag = searchParams.get('tag')?.trim() || '';
-  const source = searchParams.get('source')?.trim() || 'all';
 
   try {
     let tracks: Track[] = [];
 
     if (query) {
-      if (source === 'youtube') {
-        tracks = await searchYouTube(query, 24);
-      } else if (source === 'audius') {
-        tracks = await searchAudius(query, 24);
-      } else if (source === 'jamendo') {
-        tracks = await searchJamendo(query, 24);
-      } else {
-        // Query YouTube, Jamendo, and Audius in parallel for maximum coverage
-        const [ytTracks, jamendoTracks, audiusTracks] = await Promise.all([
-          searchYouTube(query, 12),
-          searchJamendo(query, 10),
-          searchAudius(query, 6),
-        ]);
-        // Put YouTube & Audius top results first when searching for specific songs
-        tracks = [...ytTracks, ...audiusTracks, ...jamendoTracks];
-      }
+      // Search Audius & Jamendo in parallel for legal, high-quality audio streams
+      const [audiusTracks, jamendoTracks] = await Promise.all([
+        searchAudius(query, 16),
+        searchJamendo(query, 16),
+      ]);
+      tracks = [...audiusTracks, ...jamendoTracks];
     } else if (tag) {
       tracks = await getJamendoByTag(tag, 24);
     } else {
       tracks = await getJamendoByTag('ambient+relaxing', 24);
     }
 
-    // Fallback if API returned empty
+    // Filter curated library if external search yielded few results
     if (tracks.length === 0) {
       if (query) {
         const lowerQ = query.toLowerCase();
@@ -57,10 +46,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       tracks,
       total: tracks.length,
-      source: 'multi',
+      source: 'direct-audio',
     });
   } catch (error) {
-    console.error('Music search route error:', error);
+    console.error('Music search route notice:', error);
     return NextResponse.json({
       tracks: CURATED_AMBIENT_TRACKS,
       total: CURATED_AMBIENT_TRACKS.length,
