@@ -13,11 +13,11 @@ interface Particle {
   baseAlpha: number;
   pulseSpeed: number;
   length?: number; // for rain
-  hue?: number;
+  rotation?: number; // for rose petals
+  vRot?: number;
 }
 
 interface MoodBackgroundProps {
-  // Reserved for Step 3: Audio analyser data (e.g. 0.0 to 1.0 energy boost)
   audioEnergy?: number;
 }
 
@@ -75,7 +75,6 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
             pulseSpeed: 0.02,
           });
         } else if (mood === 'night') {
-          // Starlight / Cosmic dust
           particles.push({
             x: Math.random() * width,
             y: Math.random() * height,
@@ -85,6 +84,20 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
             alpha: 0.2 + Math.random() * 0.7,
             baseAlpha: 0.2 + Math.random() * 0.7,
             pulseSpeed: 0.01 + Math.random() * 0.02,
+          });
+        } else if (mood === 'rose') {
+          // Warm floating rose petals / embers
+          particles.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            vx: -0.3 + Math.random() * 0.6,
+            vy: 0.3 + Math.random() * 0.6,
+            size: 2.5 + Math.random() * 3.5,
+            alpha: 0.2 + Math.random() * 0.5,
+            baseAlpha: 0.2 + Math.random() * 0.5,
+            pulseSpeed: 0.012 + Math.random() * 0.015,
+            rotation: Math.random() * Math.PI * 2,
+            vRot: (Math.random() - 0.5) * 0.02,
           });
         } else {
           // 'focus' - Warm emerald orbs / fireflies
@@ -130,7 +143,11 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
         Math.max(width, height) * 0.65
       );
 
-      if (mood === 'night') {
+      if (mood === 'rose') {
+        auraGradient.addColorStop(0, `rgba(244, 63, 94, ${0.14 * reactiveBoost})`);
+        auraGradient.addColorStop(0.5, `rgba(190, 24, 93, ${0.07 * reactiveBoost})`);
+        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      } else if (mood === 'night') {
         auraGradient.addColorStop(0, `rgba(99, 102, 241, ${0.12 * reactiveBoost})`);
         auraGradient.addColorStop(0.5, `rgba(79, 70, 229, ${0.06 * reactiveBoost})`);
         auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -147,7 +164,6 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
       ctx.fillStyle = auraGradient;
       ctx.fillRect(0, 0, width, height);
 
-      // If prefers-reduced-motion, stop drawing animated particles to preserve calm and comfort
       if (prefersReducedMotion) {
         return;
       }
@@ -156,11 +172,39 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
 
-        // Alpha breathing effect
         const pulse = Math.sin(time * 2 + i) * 0.25;
         const currentAlpha = Math.max(0.05, Math.min(1, p.baseAlpha + pulse + audioEnergy * 0.4));
 
-        if (mood === 'rain') {
+        if (mood === 'rose') {
+          // Floating soft rose petal / glowing ember
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          if (p.rotation !== undefined) {
+            ctx.rotate(p.rotation);
+          }
+          ctx.beginPath();
+          const petalScale = (p.size * (1 + audioEnergy * 0.5));
+          ctx.ellipse(0, 0, petalScale, petalScale * 0.6, 0, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(251, 113, 133, ${currentAlpha})`;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = 'rgba(244, 63, 94, 0.7)';
+          ctx.fill();
+          ctx.restore();
+
+          // Drift
+          p.x += p.vx + Math.sin(time + i) * 0.4;
+          p.y += p.vy;
+          if (p.rotation !== undefined && p.vRot) {
+            p.rotation += p.vRot;
+          }
+
+          if (p.y > height + 10) {
+            p.y = -10;
+            p.x = Math.random() * width;
+          }
+          if (p.x < 0) p.x = width;
+          if (p.x > width) p.x = 0;
+        } else if (mood === 'rain') {
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
           ctx.lineTo(p.x + p.vx * 2, p.y + (p.length || 15));
@@ -169,18 +213,15 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           ctx.lineCap = 'round';
           ctx.stroke();
 
-          // Move raindrop
           p.x += p.vx;
           p.y += p.vy * (1 + audioEnergy * 0.5);
 
-          // Recycle
           if (p.y > height) {
             p.y = -20;
             p.x = Math.random() * width;
           }
           if (p.x < 0) p.x = width;
         } else if (mood === 'night') {
-          // Twinkling stars / cosmic dust
           ctx.beginPath();
           const starSize = (p.size + audioEnergy * 1.5);
           ctx.arc(p.x, p.y, starSize, 0, Math.PI * 2);
@@ -188,9 +229,8 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           ctx.shadowBlur = 8;
           ctx.shadowColor = 'rgba(199, 210, 254, 0.8)';
           ctx.fill();
-          ctx.shadowBlur = 0; // reset
+          ctx.shadowBlur = 0;
 
-          // Subtle drift
           p.x += p.vx;
           p.y += p.vy;
 
@@ -199,7 +239,6 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           if (p.y < 0) p.y = height;
           if (p.y > height) p.y = 0;
         } else {
-          // Forest focus: glowing spore orbs
           ctx.beginPath();
           const orbSize = (p.size * (1 + audioEnergy * 0.6));
           ctx.arc(p.x, p.y, orbSize, 0, Math.PI * 2);
@@ -209,7 +248,6 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           ctx.fill();
           ctx.shadowBlur = 0;
 
-          // Gentle floating upward & sinusoidal drift
           p.x += p.vx + Math.sin(time + i) * 0.3;
           p.y += p.vy;
 

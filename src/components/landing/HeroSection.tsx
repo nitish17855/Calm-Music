@@ -1,16 +1,21 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useMood, MOOD_CONFIGS } from '@/context/MoodContext';
+import { usePlayer } from '@/context/PlayerContext';
 import { MoodMode } from '@/types';
-import { Play, Sparkles, Moon, CloudRain, Compass, ArrowRight, ShieldCheck, Headphones, Zap } from 'lucide-react';
+import { Play, Sparkles, Moon, CloudRain, Compass, Heart, ArrowRight, ShieldCheck, Headphones, Zap, Radio } from 'lucide-react';
 import { motion } from 'framer-motion';
+import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
+import CustomAudioModal from '@/components/player/CustomAudioModal';
 
 export default function HeroSection() {
   const { mood, setMood, config } = useMood();
+  const { isPlaying, togglePlay } = usePlayer();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const moodsList: MoodMode[] = ['night', 'rain', 'focus'];
+  const moodsList: MoodMode[] = ['rose', 'night', 'rain', 'focus'];
 
   return (
     <div className="relative pt-32 pb-20 px-4 md:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
@@ -27,7 +32,7 @@ export default function HeroSection() {
         }}
       >
         <Sparkles className="w-3.5 h-3.5" />
-        <span>Next-Generation Ambient Audio Experience</span>
+        <span>Luxury Ambient Sound & Living Canvas Experience</span>
       </motion.div>
 
       {/* Main Title */}
@@ -44,7 +49,7 @@ export default function HeroSection() {
             backgroundImage: `linear-gradient(135deg, #ffffff 30%, ${config.accentColor} 100%)`,
           }}
         >
-          Deep Focus & Tranquility
+          Deep Focus & Serenity
         </span>
       </motion.h1>
 
@@ -58,6 +63,30 @@ export default function HeroSection() {
         Immerse yourself in royalty-free ambient music paired with living canvas visualizers. 
         Engineered for creative flow, mindfulness, and deep nighttime restoration.
       </motion.p>
+
+      {/* Live Equalizer Spectrum Visualizer on Landing */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.7, delay: 0.25 }}
+        className="mt-8 p-3 rounded-2xl glass-panel inline-flex items-center gap-3 border border-white/10"
+      >
+        <button
+          onClick={togglePlay}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-white"
+          style={{ backgroundColor: config.accentColor }}
+          title={isPlaying ? 'Pause visualizer' : 'Start ambient preview'}
+        >
+          <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
+        </button>
+        <div className="flex flex-col text-left">
+          <span className="text-[11px] font-semibold text-white">Live Frequency Spectrum</span>
+          <span className="text-[10px] text-slate-400">Audio-reactive 60 FPS analysis</span>
+        </div>
+        <div className="pl-2 border-l border-white/10">
+          <AudioVisualizerBars barCount={16} height={28} />
+        </div>
+      </motion.div>
 
       {/* Interactive Actions */}
       <motion.div
@@ -77,6 +106,15 @@ export default function HeroSection() {
           <Play className="w-4 h-4 fill-white" />
           <span>Start Listening</span>
         </Link>
+
+        {/* Play from Anywhere (Custom Stream / File Drop) */}
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center gap-2 px-6 py-3.5 rounded-2xl font-medium text-slate-200 glass-pill hover:text-white"
+        >
+          <Radio className="w-4 h-4" style={{ color: config.accentColor }} />
+          <span>Stream Audio from Anywhere</span>
+        </button>
 
         <a
           href="#mood-explorer"
@@ -101,7 +139,7 @@ export default function HeroSection() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {moodsList.map((m) => {
             const item = MOOD_CONFIGS[m];
             const isSelected = mood === m;
@@ -131,6 +169,7 @@ export default function HeroSection() {
                       border: `1px solid ${item.accentColor}50`,
                     }}
                   >
+                    {m === 'rose' && <Heart className="w-6 h-6" style={{ color: item.accentColor }} />}
                     {m === 'night' && <Moon className="w-6 h-6" style={{ color: item.accentColor }} />}
                     {m === 'rain' && <CloudRain className="w-6 h-6" style={{ color: item.accentColor }} />}
                     {m === 'focus' && <Compass className="w-6 h-6" style={{ color: item.accentColor }} />}
@@ -155,9 +194,9 @@ export default function HeroSection() {
                 <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
 
                 <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
-                  <span>Particle Velocity</span>
+                  <span>Particle Drift</span>
                   <span className="font-mono text-slate-200">
-                    {m === 'rain' ? 'High / Vertical' : m === 'night' ? 'Subtle Drift' : 'Ascending Orbs'}
+                    {m === 'rose' ? 'Petals & Embers' : m === 'rain' ? 'Falling Mists' : m === 'night' ? 'Starlight Dust' : 'Ascending Orbs'}
                   </span>
                 </div>
               </button>
@@ -169,12 +208,12 @@ export default function HeroSection() {
       {/* Engineering & Agency Highlights */}
       <section className="w-full mt-24 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
         <div className="p-6 rounded-2xl glass-panel">
-          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center mb-4 text-cyan-400">
+          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center mb-4 text-rose-400">
             <Headphones className="w-5 h-5" />
           </div>
-          <h4 className="text-base font-semibold text-white mb-1.5">Legal Music Streaming</h4>
+          <h4 className="text-base font-semibold text-white mb-1.5">Universal Audio Freedom</h4>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Full-track streaming powered by Jamendo and Audius APIs. Zero scraping, zero ad-interruption.
+            Stream from Jamendo, paste any direct internet audio/radio URL, or drag & drop your personal local MP3/FLAC music.
           </p>
         </div>
 
@@ -182,9 +221,9 @@ export default function HeroSection() {
           <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center mb-4 text-indigo-400">
             <Zap className="w-5 h-5" />
           </div>
-          <h4 className="text-base font-semibold text-white mb-1.5">Web Audio API Analyser</h4>
+          <h4 className="text-base font-semibold text-white mb-1.5">Live FFT Equalizer Bars</h4>
           <p className="text-xs text-slate-400 leading-relaxed">
-            HTML5 Audio routed into Web Audio AnalyserNodes to drive audio-reactive visuals in 60fps canvas.
+            Real-time Web Audio API AnalyserNode tracks frequency bands, driving both background particle pulses and rhythmic visualizer bars.
           </p>
         </div>
 
@@ -194,10 +233,13 @@ export default function HeroSection() {
           </div>
           <h4 className="text-base font-semibold text-white mb-1.5">Production Architecture</h4>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Next.js App Router with persistent layout shells, Auth.js, Postgres with Prisma, and Vercel-ready CI.
+            Neon Cloud PostgreSQL with Prisma ORM, Auth.js sessions, persistent audio layout shells, and Vercel edge deployment.
           </p>
         </div>
       </section>
+
+      {/* Custom Stream & File Drop Modal */}
+      <CustomAudioModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
 
     </div>
   );

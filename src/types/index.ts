@@ -1,4 +1,4 @@
-export type MoodMode = 'rain' | 'night' | 'focus';
+export type MoodMode = 'night' | 'rain' | 'focus' | 'rose';
 
 export interface MoodConfig {
   id: MoodMode;
@@ -24,7 +24,7 @@ export interface Track {
   duration: number; // in seconds
   audioUrl: string;
   coverUrl: string;
-  source: 'jamendo' | 'audius';
+  source: 'jamendo' | 'audius' | 'custom' | 'local';
   waveform?: number[];
 }
 

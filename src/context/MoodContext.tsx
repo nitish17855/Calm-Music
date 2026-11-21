@@ -4,6 +4,21 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { MoodMode, MoodConfig } from '@/types';
 
 export const MOOD_CONFIGS: Record<MoodMode, MoodConfig> = {
+  rose: {
+    id: 'rose',
+    name: 'Sunset Rose',
+    tagline: 'Warm blush serenity, gentle ember glow and velvet calm',
+    description: 'Soft calming crimson-rose twilight hues and floating petals designed to induce deep emotional peace.',
+    icon: 'Heart',
+    gradient: {
+      from: '#16080e',
+      via: '#2c101c',
+      to: '#421727',
+    },
+    accentColor: '#f43f5e',
+    particleColor: 'rgba(251, 113, 133, 0.65)',
+    particleCount: 60,
+  },
   night: {
     id: 'night',
     name: 'Deep Night',
@@ -61,7 +76,7 @@ interface MoodContextType {
 const MoodContext = createContext<MoodContextType | undefined>(undefined);
 
 export function MoodProvider({ children }: { children: React.ReactNode }) {
-  const [mood, setMoodState] = useState<MoodMode>('night');
+  const [mood, setMoodState] = useState<MoodMode>('rose');
 
   useEffect(() => {
     // Read persisted mood if available
@@ -79,7 +94,7 @@ export function MoodProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleNextMood = () => {
-    const moods: MoodMode[] = ['night', 'rain', 'focus'];
+    const moods: MoodMode[] = ['rose', 'night', 'rain', 'focus'];
     const nextIndex = (moods.indexOf(mood) + 1) % moods.length;
     setMood(moods[nextIndex]);
   };

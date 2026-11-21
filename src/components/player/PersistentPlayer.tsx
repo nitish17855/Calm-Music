@@ -16,9 +16,11 @@ import {
   Volume2,
   VolumeX,
   ListMusic,
-  ExternalLink,
+  Radio,
 } from 'lucide-react';
 import QueueDrawer from './QueueDrawer';
+import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
+import CustomAudioModal from './CustomAudioModal';
 
 export default function PersistentPlayer() {
   const {
@@ -44,6 +46,7 @@ export default function PersistentPlayer() {
 
   const { config } = useMood();
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
 
   if (!currentTrack) return null;
 
@@ -57,8 +60,8 @@ export default function PersistentPlayer() {
           {/* Main Controls Row */}
           <div className="flex items-center justify-between gap-3">
             
-            {/* Left: Track Information */}
-            <div className="flex items-center gap-3 min-w-0 max-w-[30%] sm:max-w-[280px]">
+            {/* Left: Track Information & Live Equalizer Visualizer Bars */}
+            <div className="flex items-center gap-3 min-w-0 max-w-[34%] sm:max-w-[320px]">
               <div className="relative w-11 h-11 md:w-12 md:h-12 rounded-xl overflow-hidden flex-shrink-0 bg-slate-800 shadow-md">
                 <Image
                   src={currentTrack.coverUrl}
@@ -67,7 +70,6 @@ export default function PersistentPlayer() {
                   sizes="48px"
                   className="object-cover"
                 />
-                {/* Audio pulse ring on album art */}
                 {isPlaying && (
                   <div
                     className="absolute inset-0 border-2 rounded-xl pointer-events-none transition-all duration-150"
@@ -79,7 +81,7 @@ export default function PersistentPlayer() {
                 )}
               </div>
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h4 className="text-xs md:text-sm font-semibold text-white truncate tracking-tight">
                   {currentTrack.title}
                 </h4>
@@ -96,6 +98,11 @@ export default function PersistentPlayer() {
                     {currentTrack.source}
                   </span>
                 </div>
+              </div>
+
+              {/* Dynamic Equalizer Bars jumping up and down to the music */}
+              <div className="hidden lg:block flex-shrink-0 pl-1">
+                <AudioVisualizerBars barCount={12} height={26} compact />
               </div>
             </div>
 
@@ -207,9 +214,19 @@ export default function PersistentPlayer() {
               </div>
             </div>
 
-            {/* Right: Volume & Queue */}
-            <div className="flex items-center gap-2 sm:gap-3 justify-end min-w-0 max-w-[28%] sm:max-w-[220px]">
+            {/* Right: Custom URL / File Stream + Volume & Queue */}
+            <div className="flex items-center gap-2 sm:gap-3 justify-end min-w-0 max-w-[32%] sm:max-w-[260px]">
               
+              {/* Play from Anywhere (Custom Stream / File) */}
+              <button
+                onClick={() => setIsCustomModalOpen(true)}
+                className="p-2 rounded-xl text-slate-300 hover:text-white glass-pill hover:bg-white/10 transition-colors flex items-center gap-1.5"
+                title="Play Audio from Anywhere (Custom URL or Local File Drop)"
+              >
+                <Radio className="w-3.5 h-3.5" style={{ color: config.accentColor }} />
+                <span className="text-[11px] font-medium hidden xl:inline">Stream Anywhere</span>
+              </button>
+
               {/* Volume Slider */}
               <div className="hidden md:flex items-center gap-2">
                 <button
@@ -231,7 +248,7 @@ export default function PersistentPlayer() {
                   step="0.01"
                   value={isMuted ? 0 : volume}
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
-                  className="w-16 h-1 accent-indigo-400 bg-white/10 rounded-full appearance-none cursor-pointer"
+                  className="w-16 h-1 bg-white/10 rounded-full appearance-none cursor-pointer"
                   style={{ accentColor: config.accentColor }}
                   aria-label="Volume slider"
                 />
@@ -257,6 +274,9 @@ export default function PersistentPlayer() {
 
       {/* Queue Drawer */}
       <QueueDrawer isOpen={isQueueOpen} onClose={() => setIsQueueOpen(false)} />
+
+      {/* Custom Stream & File Drop Modal */}
+      <CustomAudioModal isOpen={isCustomModalOpen} onClose={() => setIsCustomModalOpen(false)} />
     </>
   );
 }

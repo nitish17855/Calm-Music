@@ -15,9 +15,12 @@ interface PlayerContextType {
   isShuffle: boolean;
   queue: Track[];
   queueIndex: number;
-  audioEnergy: number; // For audio-reactive visualizer (Step 3)
+  audioEnergy: number;
+  frequencyData: number[]; // 16 frequency bands for visualizer bars
 
   playTrack: (track: Track, newQueue?: Track[]) => void;
+  playCustomStream: (url: string, title?: string, artist?: string) => void;
+  playLocalFile: (file: File) => void;
   togglePlay: () => void;
   seek: (seconds: number) => void;
   setVolume: (val: number) => void;
@@ -45,6 +48,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<Track[]>(CURATED_AMBIENT_TRACKS);
   const [queueIndex, setQueueIndex] = useState<number>(0);
   const [audioEnergy, setAudioEnergy] = useState<number>(0);
+  const [frequencyData, setFrequencyData] = useState<number[]>(new Array(16).fill(0.1));
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -61,7 +65,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const ctx = new AudioCtx();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
-      analyser.smoothingTimeConstant = 0.8;
+      analyser.smoothingTimeConstant = 0.82;
 
       const source = ctx.createMediaElementSource(audioRef.current);
       source.connect(analyser);
@@ -71,38 +75,52 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       analyserRef.current = analyser;
       sourceNodeRef.current = source;
     } catch (e) {
-      // Browsers may block autostart until user gesture or cross-origin restrictions
       console.warn('Web Audio Analyser setup notice:', e);
     }
   }, []);
 
-  // Update audio-reactive energy loop
+  // Update audio-reactive energy & frequency bars loop
   useEffect(() => {
     if (!isPlaying) {
       setAudioEnergy(0);
+      setFrequencyData(new Array(16).fill(0.08));
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       return;
     }
 
-    const updateEnergy = () => {
+    const updateVisualizer = () => {
       if (analyserRef.current) {
-        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        const bufferLength = analyserRef.current.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
         analyserRef.current.getByteFrequencyData(dataArray);
 
         let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
+        const bars: number[] = [];
+        const step = Math.max(1, Math.floor(bufferLength / 16));
+
+        for (let i = 0; i < 16; i++) {
+          const val = dataArray[i * step] || 0;
+          bars.push(Math.max(0.08, val / 255));
+          sum += val;
         }
-        const avg = sum / (dataArray.length * 255);
+
+        const avg = sum / (bufferLength * 255);
         setAudioEnergy(avg);
+        setFrequencyData(bars);
       } else {
-        // Fallback gentle pulse if Web Audio is restricted
-        setAudioEnergy(0.25 + Math.sin(Date.now() / 400) * 0.15);
+        // Fallback procedural breathing bars if browser restricts cross-origin Web Audio
+        const t = Date.now() / 300;
+        const simulated = Array.from({ length: 16 }, (_, i) => {
+          return 0.15 + Math.abs(Math.sin(t + i * 0.4)) * 0.65;
+        });
+        setFrequencyData(simulated);
+        setAudioEnergy(0.25 + Math.sin(t) * 0.15);
       }
-      animationFrameRef.current = requestAnimationFrame(updateEnergy);
+
+      animationFrameRef.current = requestAnimationFrame(updateVisualizer);
     };
 
-    animationFrameRef.current = requestAnimationFrame(updateEnergy);
+    animationFrameRef.current = requestAnimationFrame(updateVisualizer);
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
@@ -141,6 +159,38 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       });
     }
   }, [initAudioContext]);
+
+  // Play any custom internet audio stream or radio URL
+  const playCustomStream = useCallback((url: string, title?: string, artist?: string) => {
+    const customTrack: Track = {
+      id: `custom-${Date.now()}`,
+      title: title || 'Custom Web Stream',
+      artistName: artist || 'Web Audio Source',
+      albumName: 'Live Web Stream',
+      duration: 0,
+      audioUrl: url,
+      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&q=80',
+      source: 'custom',
+    };
+    playTrack(customTrack);
+  }, [playTrack]);
+
+  // Play any local audio file dropped by user
+  const playLocalFile = useCallback((file: File) => {
+    const objectUrl = URL.createObjectURL(file);
+    const fileName = file.name.replace(/\.[^/.]+$/, '');
+    const localTrack: Track = {
+      id: `local-${Date.now()}`,
+      title: fileName,
+      artistName: 'Local Audio File',
+      albumName: 'User Library',
+      duration: 0,
+      audioUrl: objectUrl,
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=400&q=80',
+      source: 'local',
+    };
+    playTrack(localTrack);
+  }, [playTrack]);
 
   const togglePlay = useCallback(() => {
     if (!audioRef.current) return;
@@ -217,7 +267,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const prevTrack = useCallback(() => {
     if (!audioRef.current) return;
-    // If more than 3 seconds in, restart track
     if (audioRef.current.currentTime > 3) {
       seek(0);
       return;
@@ -269,7 +318,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if user is typing in an input/textarea
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
@@ -321,7 +369,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         queue,
         queueIndex,
         audioEnergy,
+        frequencyData,
         playTrack,
+        playCustomStream,
+        playLocalFile,
         togglePlay,
         seek,
         setVolume,
@@ -335,7 +386,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         clearQueue,
       }}
     >
-      {/* Single persistent HTML5 Audio Element */}
       <audio
         ref={audioRef}
         crossOrigin="anonymous"

@@ -17,13 +17,17 @@ import {
   Sparkles,
   Disc3,
   Check,
+  Radio,
+  Flame,
 } from 'lucide-react';
+import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
+import CustomAudioModal from '@/components/player/CustomAudioModal';
 
 const MOOD_TAGS = [
+  { label: 'Sunset Rose', tag: 'chillout+relax' },
   { label: 'Ambient Focus', tag: 'ambient' },
   { label: 'Rain & Nature', tag: 'rain+nature' },
   { label: 'Deep Meditation', tag: 'meditation' },
-  { label: 'Chill Lo-Fi', tag: 'chillout' },
   { label: 'Nocturnal Piano', tag: 'piano+calm' },
   { label: 'Electronic Zen', tag: 'downtempo' },
 ];
@@ -34,11 +38,13 @@ export default function SearchPage() {
   const { config } = useMood();
 
   const [query, setQuery] = useState('');
-  const [activeTag, setActiveTag] = useState('ambient');
+  const [activeTag, setActiveTag] = useState('chillout+relax');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'jamendo' | 'audius'>('all');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [addedTrackId, setAddedTrackId] = useState<string | null>(null);
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(new Set());
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
 
   // Load existing liked tracks if user is authenticated
   useEffect(() => {
@@ -57,18 +63,19 @@ export default function SearchPage() {
   // Debounced search / tag fetch
   useEffect(() => {
     const handler = setTimeout(() => {
-      fetchTracks(query, activeTag);
+      fetchTracks(query, activeTag, sourceFilter);
     }, 350);
 
     return () => clearTimeout(handler);
-  }, [query, activeTag]);
+  }, [query, activeTag, sourceFilter]);
 
-  const fetchTracks = async (searchQuery: string, tag: string) => {
+  const fetchTracks = async (searchQuery: string, tag: string, source: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (searchQuery.trim()) {
         params.set('q', searchQuery.trim());
+        params.set('source', source);
       } else if (tag) {
         params.set('tag', tag);
       }
@@ -125,7 +132,6 @@ export default function SearchPage() {
       });
     } catch (err) {
       console.error('Like toggle error:', err);
-      // Revert if error
       setLikedTrackIds(likedTrackIds);
     }
   };
@@ -135,32 +141,63 @@ export default function SearchPage() {
       
       {/* Search Header */}
       <div className="mb-8">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-          Explore Music & Soundscapes
-        </h1>
-        <p className="text-sm text-slate-400 mt-1.5">
-          Stream full-length ambient tracks directly from Jamendo&apos;s licensed open library.
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              Explore Music & Soundscapes
+            </h1>
+            <p className="text-sm text-slate-400 mt-1.5">
+              Stream licensed ambient music from Jamendo & Audius, or stream any custom web radio / local song file.
+            </p>
+          </div>
 
-        {/* Search Bar */}
-        <div className="mt-6 relative max-w-2xl">
-          <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              if (e.target.value) setActiveTag('');
-            }}
-            placeholder="Search tracks, ambient artists, meditative moods..."
-            className="w-full pl-12 pr-10 py-3.5 rounded-2xl glass-panel text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 transition-all"
-            style={{
-              borderColor: `${config.accentColor}40`,
-            }}
-          />
-          {loading && (
-            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
-          )}
+          <button
+            onClick={() => setIsCustomModalOpen(true)}
+            className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-medium text-white glass-pill hover:bg-white/10 transition-colors"
+          >
+            <Radio className="w-4 h-4" style={{ color: config.accentColor }} />
+            <span>Stream Anywhere / Drop File</span>
+          </button>
+        </div>
+
+        {/* Search Bar & Source Selector */}
+        <div className="mt-6 flex flex-col md:flex-row gap-3 max-w-3xl">
+          <div className="relative flex-1">
+            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (e.target.value) setActiveTag('');
+              }}
+              placeholder="Search songs, artists, lofi, or ambient soundscapes..."
+              className="w-full pl-12 pr-10 py-3.5 rounded-2xl glass-panel text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 transition-all"
+              style={{
+                borderColor: `${config.accentColor}40`,
+              }}
+            />
+            {loading && (
+              <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
+            )}
+          </div>
+
+          {/* Source Filter Pill Group */}
+          <div className="flex items-center p-1 rounded-2xl bg-black/40 border border-white/10 self-start md:self-auto">
+            {(['all', 'jamendo', 'audius'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSourceFilter(s)}
+                className={`px-3 py-2 rounded-xl text-xs font-medium capitalize transition-all ${
+                  sourceFilter === s
+                    ? 'bg-white/15 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {s === 'all' ? 'All Sources' : s}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Quick Tag Pills */}
@@ -210,7 +247,7 @@ export default function SearchPage() {
         <div className="text-center py-24 glass-panel rounded-3xl max-w-lg mx-auto">
           <Disc3 className="w-10 h-10 text-slate-500 mx-auto mb-3 animate-spin" style={{ animationDuration: '8s' }} />
           <h3 className="text-base font-semibold text-white">No soundscapes found</h3>
-          <p className="text-xs text-slate-400 mt-1">Try another keyword or select one of the ambient mood pills above.</p>
+          <p className="text-xs text-slate-400 mt-1">Try another keyword or stream any custom web URL / local file above.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -253,14 +290,22 @@ export default function SearchPage() {
 
                   {/* Metadata */}
                   <div className="min-w-0 flex-1">
-                    <h3
-                      className={`text-sm font-semibold truncate ${
-                        isCurrent ? 'text-white' : 'text-slate-200'
-                      }`}
-                      style={{ color: isCurrent ? config.accentColor : undefined }}
-                    >
-                      {track.title}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3
+                        className={`text-sm font-semibold truncate ${
+                          isCurrent ? 'text-white' : 'text-slate-200'
+                        }`}
+                        style={{ color: isCurrent ? config.accentColor : undefined }}
+                      >
+                        {track.title}
+                      </h3>
+                      {isCurrent && isPlaying && (
+                        <div className="hidden sm:block flex-shrink-0">
+                          <AudioVisualizerBars barCount={5} height={14} compact />
+                        </div>
+                      )}
+                    </div>
+
                     <p className="text-xs text-slate-400 truncate mt-0.5">{track.artistName}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[10px] font-mono text-slate-400">
@@ -305,6 +350,9 @@ export default function SearchPage() {
           })}
         </div>
       )}
+
+      {/* Custom Stream & File Drop Modal */}
+      <CustomAudioModal isOpen={isCustomModalOpen} onClose={() => setIsCustomModalOpen(false)} />
 
     </div>
   );

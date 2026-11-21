@@ -6,9 +6,10 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useMood, MOOD_CONFIGS } from '@/context/MoodContext';
 import { MoodMode } from '@/types';
-import { Moon, CloudRain, Compass, Music, Sparkles, User, LogOut } from 'lucide-react';
+import { Moon, CloudRain, Compass, Heart, Music, User, LogOut } from 'lucide-react';
 
 const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
+  rose: <Heart className="w-3.5 h-3.5" />,
   night: <Moon className="w-3.5 h-3.5" />,
   rain: <CloudRain className="w-3.5 h-3.5" />,
   focus: <Compass className="w-3.5 h-3.5" />,
@@ -25,7 +26,7 @@ export default function Navbar() {
     { href: '/library', label: 'Library' },
   ];
 
-  const moods: MoodMode[] = ['night', 'rain', 'focus'];
+  const moods: MoodMode[] = ['rose', 'night', 'rain', 'focus'];
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 px-3 md:px-8 py-3 transition-all duration-300">

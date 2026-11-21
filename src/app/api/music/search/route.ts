@@ -1,25 +1,39 @@
 import { NextResponse } from 'next/server';
-import { searchJamendo, getJamendoByTag, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
+import { searchJamendo, getJamendoByTag, searchAudius, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
 import { Track } from '@/types';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q')?.trim() || '';
   const tag = searchParams.get('tag')?.trim() || '';
+  const source = searchParams.get('source')?.trim() || 'all';
 
   try {
     let tracks: Track[] = [];
 
     if (query) {
-      tracks = await searchJamendo(query, 24);
+      if (source === 'audius') {
+        tracks = await searchAudius(query, 24);
+      } else if (source === 'jamendo') {
+        tracks = await searchJamendo(query, 24);
+      } else {
+        // Query both Jamendo & Audius in parallel and combine
+        const [jamendoTracks, audiusTracks] = await Promise.all([
+          searchJamendo(query, 16),
+          searchAudius(query, 8),
+        ]);
+        tracks = [...jamendoTracks, ...audiusTracks];
+      }
     } else if (tag) {
       tracks = await getJamendoByTag(tag, 24);
     } else {
-      // Default ambient query
+      // Default query: sunset ambient / calming
       tracks = await getJamendoByTag('ambient+relaxing', 24);
     }
 
-    // If API returned empty (e.g. offline or client id rate-limited), seamlessly fallback to curated library
+    // Fallback if API is offline
     if (tracks.length === 0) {
       if (query) {
         const lowerQ = query.toLowerCase();
@@ -40,7 +54,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       tracks,
       total: tracks.length,
-      source: 'jamendo',
+      source: 'multi',
     });
   } catch (error) {
     console.error('Music search route error:', error);
