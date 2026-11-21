@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { searchJamendo, getJamendoByTag, searchAudius, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
+import { searchYouTube, searchJamendo, getJamendoByTag, searchAudius, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
 import { Track } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -14,26 +14,29 @@ export async function GET(request: Request) {
     let tracks: Track[] = [];
 
     if (query) {
-      if (source === 'audius') {
+      if (source === 'youtube') {
+        tracks = await searchYouTube(query, 24);
+      } else if (source === 'audius') {
         tracks = await searchAudius(query, 24);
       } else if (source === 'jamendo') {
         tracks = await searchJamendo(query, 24);
       } else {
-        // Query both Jamendo & Audius in parallel and combine
-        const [jamendoTracks, audiusTracks] = await Promise.all([
-          searchJamendo(query, 16),
-          searchAudius(query, 8),
+        // Query YouTube, Jamendo, and Audius in parallel for maximum coverage
+        const [ytTracks, jamendoTracks, audiusTracks] = await Promise.all([
+          searchYouTube(query, 12),
+          searchJamendo(query, 10),
+          searchAudius(query, 6),
         ]);
-        tracks = [...jamendoTracks, ...audiusTracks];
+        // Put YouTube & Audius top results first when searching for specific songs
+        tracks = [...ytTracks, ...audiusTracks, ...jamendoTracks];
       }
     } else if (tag) {
       tracks = await getJamendoByTag(tag, 24);
     } else {
-      // Default query: sunset ambient / calming
       tracks = await getJamendoByTag('ambient+relaxing', 24);
     }
 
-    // Fallback if API is offline
+    // Fallback if API returned empty
     if (tracks.length === 0) {
       if (query) {
         const lowerQ = query.toLowerCase();

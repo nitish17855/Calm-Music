@@ -24,7 +24,8 @@ export interface Track {
   duration: number; // in seconds
   audioUrl: string;
   coverUrl: string;
-  source: 'jamendo' | 'audius' | 'custom' | 'local';
+  source: 'jamendo' | 'audius' | 'youtube' | 'custom' | 'local';
+  youtubeId?: string;
   waveform?: number[];
 }
 
@@ -32,6 +33,6 @@ export type RepeatMode = 'off' | 'all' | 'one';
 
 export interface SearchResult {
   tracks: Track[];
-  source: 'jamendo' | 'audius' | 'curated';
+  source: 'jamendo' | 'audius' | 'youtube' | 'curated';
   total: number;
 }

@@ -1,6 +1,5 @@
 import { Track } from '@/types';
 
-// Robust curated fallback tracks if API is rate-limited or offline
 export const CURATED_AMBIENT_TRACKS: Track[] = [
   {
     id: 'curated-1',
@@ -56,6 +55,83 @@ export const CURATED_AMBIENT_TRACKS: Track[] = [
 
 const JAMENDO_CLIENT_ID = process.env.JAMENDO_CLIENT_ID || '56d30c95';
 
+// Helper to parse "4:33" or "1:02:15" into seconds
+function parseDuration(timeStr?: string): number {
+  if (!timeStr) return 180;
+  const parts = timeStr.split(':').map(Number);
+  if (parts.length === 2) {
+    return (parts[0] || 0) * 60 + (parts[1] || 0);
+  }
+  if (parts.length === 3) {
+    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+  }
+  return 180;
+}
+
+// Search YouTube directly for any song
+export async function searchYouTube(query: string, limit = 12): Promise<Track[]> {
+  try {
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+      next: { revalidate: 1800 },
+    });
+
+    if (!res.ok) return [];
+
+    const html = await res.text();
+    const match = html.match(/ytInitialData[ ]*=[ ]*({.+?});<\/script>/);
+    if (!match) return [];
+
+    const data = JSON.parse(match[1]);
+    const contents =
+      data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]
+        ?.itemSectionRenderer?.contents;
+
+    if (!Array.isArray(contents)) return [];
+
+    const tracks: Track[] = [];
+
+    for (const item of contents) {
+      if (!item.videoRenderer) continue;
+      const vr = item.videoRenderer;
+      const videoId = vr.videoId;
+      if (!videoId) continue;
+
+      const title = vr.title?.runs?.[0]?.text || 'Untitled Song';
+      const channel = vr.ownerText?.runs?.[0]?.text || 'YouTube Music';
+      const durationStr = vr.lengthText?.simpleText;
+      const duration = parseDuration(durationStr);
+
+      const thumb =
+        vr.thumbnail?.thumbnails?.[vr.thumbnail.thumbnails.length - 1]?.url ||
+        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+      tracks.push({
+        id: `yt-${videoId}`,
+        title,
+        artistName: channel,
+        albumName: 'YouTube Official Stream',
+        duration,
+        audioUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        coverUrl: thumb,
+        source: 'youtube',
+        youtubeId: videoId,
+      });
+
+      if (tracks.length >= limit) break;
+    }
+
+    return tracks;
+  } catch (err) {
+    console.error('YouTube search error:', err);
+    return [];
+  }
+}
+
 export async function searchJamendo(query: string, limit = 20): Promise<Track[]> {
   try {
     const url = new URL('https://api.jamendo.com/v3.0/tracks/');
@@ -67,15 +143,10 @@ export async function searchJamendo(query: string, limit = 20): Promise<Track[]>
     url.searchParams.set('include', 'musicinfo');
 
     const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
-    if (!res.ok) {
-      console.warn('Jamendo API responded with error status:', res.status);
-      return [];
-    }
+    if (!res.ok) return [];
 
     const data = await res.json();
-    if (!data.results || !Array.isArray(data.results)) {
-      return [];
-    }
+    if (!data.results || !Array.isArray(data.results)) return [];
 
     return data.results.map((item: any) => ({
       id: `jamendo-${item.id}`,
@@ -124,7 +195,6 @@ export async function getJamendoByTag(tags: string, limit = 20): Promise<Track[]
   }
 }
 
-// Audius open search API for secondary decentralized music search
 export async function searchAudius(query: string, limit = 10): Promise<Track[]> {
   try {
     const url = `https://discoveryprovider.audius.co/v1/tracks/search?query=${encodeURIComponent(

@@ -17,6 +17,7 @@ import {
   VolumeX,
   ListMusic,
   Radio,
+  Tv,
 } from 'lucide-react';
 import QueueDrawer from './QueueDrawer';
 import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
@@ -33,6 +34,7 @@ export default function PersistentPlayer() {
     repeatMode,
     isShuffle,
     queue,
+    isVideoExpanded,
     togglePlay,
     seek,
     setVolume,
@@ -42,6 +44,7 @@ export default function PersistentPlayer() {
     nextTrack,
     prevTrack,
     audioEnergy,
+    toggleVideoExpanded,
   } = usePlayer();
 
   const { config } = useMood();
@@ -74,7 +77,7 @@ export default function PersistentPlayer() {
                   <div
                     className="absolute inset-0 border-2 rounded-xl pointer-events-none transition-all duration-150"
                     style={{
-                      borderColor: config.accentColor,
+                      borderColor: currentTrack.source === 'youtube' ? '#ef4444' : config.accentColor,
                       opacity: 0.3 + audioEnergy * 0.7,
                     }}
                   />
@@ -89,18 +92,26 @@ export default function PersistentPlayer() {
                   <span className="truncate">{currentTrack.artistName}</span>
                   <span className="w-1 h-1 rounded-full bg-slate-600 flex-shrink-0" />
                   <span
-                    className="text-[9px] font-mono uppercase tracking-wider px-1 py-0.2 rounded"
-                    style={{
-                      backgroundColor: `${config.accentColor}15`,
-                      color: config.accentColor,
-                    }}
+                    className={`text-[9px] font-mono uppercase tracking-wider px-1 py-0.2 rounded font-semibold ${
+                      currentTrack.source === 'youtube'
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        : ''
+                    }`}
+                    style={
+                      currentTrack.source !== 'youtube'
+                        ? {
+                            backgroundColor: `${config.accentColor}15`,
+                            color: config.accentColor,
+                          }
+                        : undefined
+                    }
                   >
                     {currentTrack.source}
                   </span>
                 </div>
               </div>
 
-              {/* Dynamic Equalizer Bars jumping up and down to the music */}
+              {/* Dynamic Equalizer Bars */}
               <div className="hidden lg:block flex-shrink-0 pl-1">
                 <AudioVisualizerBars barCount={12} height={26} compact />
               </div>
@@ -214,9 +225,22 @@ export default function PersistentPlayer() {
               </div>
             </div>
 
-            {/* Right: Custom URL / File Stream + Volume & Queue */}
-            <div className="flex items-center gap-2 sm:gap-3 justify-end min-w-0 max-w-[32%] sm:max-w-[260px]">
+            {/* Right: Picture-in-Picture / Stream / Volume / Queue */}
+            <div className="flex items-center gap-2 sm:gap-2.5 justify-end min-w-0 max-w-[34%] sm:max-w-[280px]">
               
+              {/* YouTube Video Toggle Button (when a YouTube track is playing) */}
+              {currentTrack.source === 'youtube' && (
+                <button
+                  onClick={toggleVideoExpanded}
+                  className={`p-2 rounded-xl transition-all ${
+                    isVideoExpanded ? 'bg-red-500 text-white' : 'glass-pill text-slate-300 hover:text-white'
+                  }`}
+                  title={isVideoExpanded ? 'Hide Video Window' : 'Show Floating Video Window'}
+                >
+                  <Tv className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               {/* Play from Anywhere (Custom Stream / File) */}
               <button
                 onClick={() => setIsCustomModalOpen(true)}
@@ -224,7 +248,7 @@ export default function PersistentPlayer() {
                 title="Play Audio from Anywhere (Custom URL or Local File Drop)"
               >
                 <Radio className="w-3.5 h-3.5" style={{ color: config.accentColor }} />
-                <span className="text-[11px] font-medium hidden xl:inline">Stream Anywhere</span>
+                <span className="text-[11px] font-medium hidden xl:inline">Stream</span>
               </button>
 
               {/* Volume Slider */}

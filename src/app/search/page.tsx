@@ -18,7 +18,7 @@ import {
   Disc3,
   Check,
   Radio,
-  Flame,
+  Tv,
 } from 'lucide-react';
 import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
 import CustomAudioModal from '@/components/player/CustomAudioModal';
@@ -39,7 +39,7 @@ export default function SearchPage() {
 
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState('chillout+relax');
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'jamendo' | 'audius'>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'youtube' | 'audius' | 'jamendo'>('all');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [addedTrackId, setAddedTrackId] = useState<string | null>(null);
@@ -144,10 +144,10 @@ export default function SearchPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Explore Music & Soundscapes
+              Search & Play Any Song
             </h1>
             <p className="text-sm text-slate-400 mt-1.5">
-              Stream licensed ambient music from Jamendo & Audius, or stream any custom web radio / local song file.
+              Instant access to millions of songs across YouTube Music, Audius, Jamendo, and custom audio streams.
             </p>
           </div>
 
@@ -156,7 +156,7 @@ export default function SearchPage() {
             className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-medium text-white glass-pill hover:bg-white/10 transition-colors"
           >
             <Radio className="w-4 h-4" style={{ color: config.accentColor }} />
-            <span>Stream Anywhere / Drop File</span>
+            <span>Drop File / Custom URL</span>
           </button>
         </div>
 
@@ -171,7 +171,7 @@ export default function SearchPage() {
                 setQuery(e.target.value);
                 if (e.target.value) setActiveTag('');
               }}
-              placeholder="Search songs, artists, lofi, or ambient soundscapes..."
+              placeholder="Search ANY song: e.g. Coldplay, Taylor Swift, Interstellar, Starboy, Lofi..."
               className="w-full pl-12 pr-10 py-3.5 rounded-2xl glass-panel text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 transition-all"
               style={{
                 borderColor: `${config.accentColor}40`,
@@ -183,12 +183,12 @@ export default function SearchPage() {
           </div>
 
           {/* Source Filter Pill Group */}
-          <div className="flex items-center p-1 rounded-2xl bg-black/40 border border-white/10 self-start md:self-auto">
-            {(['all', 'jamendo', 'audius'] as const).map((s) => (
+          <div className="flex items-center p-1 rounded-2xl bg-black/40 border border-white/10 self-start md:self-auto overflow-x-auto">
+            {(['all', 'youtube', 'audius', 'jamendo'] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setSourceFilter(s)}
-                className={`px-3 py-2 rounded-xl text-xs font-medium capitalize transition-all ${
+                className={`px-3 py-2 rounded-xl text-xs font-medium capitalize transition-all whitespace-nowrap ${
                   sourceFilter === s
                     ? 'bg-white/15 text-white shadow'
                     : 'text-slate-400 hover:text-slate-200'
@@ -247,7 +247,7 @@ export default function SearchPage() {
         <div className="text-center py-24 glass-panel rounded-3xl max-w-lg mx-auto">
           <Disc3 className="w-10 h-10 text-slate-500 mx-auto mb-3 animate-spin" style={{ animationDuration: '8s' }} />
           <h3 className="text-base font-semibold text-white">No soundscapes found</h3>
-          <p className="text-xs text-slate-400 mt-1">Try another keyword or stream any custom web URL / local file above.</p>
+          <p className="text-xs text-slate-400 mt-1">Try typing another artist, song title, or switch to All Sources.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -311,7 +311,13 @@ export default function SearchPage() {
                       <span className="text-[10px] font-mono text-slate-400">
                         {formatTime(track.duration)}
                       </span>
-                      <span className="text-[9px] uppercase font-mono tracking-wider px-1 rounded bg-white/5 text-slate-400">
+                      <span
+                        className={`text-[9px] uppercase font-mono tracking-wider px-1.5 py-0.2 rounded font-semibold ${
+                          track.source === 'youtube'
+                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            : 'bg-white/5 text-slate-400'
+                        }`}
+                      >
                         {track.source}
                       </span>
                     </div>
