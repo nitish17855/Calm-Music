@@ -1,23 +1,23 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { MoodMode, MoodConfig } from '@/types';
+import { MoodMode, MoodConfig, DrivePerspective } from '@/types';
 
 export const MOOD_CONFIGS: Record<MoodMode, MoodConfig> = {
   drive: {
     id: 'drive',
-    name: 'Jungle Drive',
-    tagline: 'Late-night cruising through a vast misty forest',
-    description: 'A peaceful night drive along a winding road through deep towering jungle trees, headlights slicing through calm ambient mist.',
+    name: 'Scenic Canyon Drive',
+    tagline: 'Sunset grand tourer cruising through panoramic canyon ridges',
+    description: 'A breathtaking scenic mountain pass through terracotta canyon cliffs and alpine peaks under a glowing petrol sky.',
     icon: 'Car',
     gradient: {
-      from: '#030c07',
-      via: '#07180f',
-      to: '#0b2618',
+      from: '#244855', // Deep Petrol Teal
+      via: '#874F41',  // Earthy Canyon Bronze
+      to: '#E64833',   // Sunburst Terracotta
     },
-    accentColor: '#10b981',
-    particleColor: 'rgba(52, 211, 153, 0.4)',
-    particleCount: 45,
+    accentColor: '#E64833',
+    particleColor: 'rgba(251, 233, 208, 0.45)', // Warm desert cream golden embers
+    particleCount: 40,
   },
   rose: {
     id: 'rose',
@@ -86,18 +86,26 @@ interface MoodContextType {
   config: MoodConfig;
   setMood: (mood: MoodMode) => void;
   toggleNextMood: () => void;
+  drivePerspective: DrivePerspective;
+  setDrivePerspective: (p: DrivePerspective) => void;
+  toggleDrivePerspective: () => void;
 }
 
 const MoodContext = createContext<MoodContextType | undefined>(undefined);
 
 export function MoodProvider({ children }: { children: React.ReactNode }) {
   const [mood, setMoodState] = useState<MoodMode>('drive');
+  const [drivePerspective, setDrivePerspectiveState] = useState<DrivePerspective>('cockpit');
 
   useEffect(() => {
     // Read persisted mood if available
     const saved = localStorage.getItem('calm_preferred_mood') as MoodMode;
     if (saved && MOOD_CONFIGS[saved]) {
       setMoodState(saved);
+    }
+    const savedPerspective = localStorage.getItem('calm_drive_perspective') as DrivePerspective;
+    if (savedPerspective === 'cockpit' || savedPerspective === 'third-person') {
+      setDrivePerspectiveState(savedPerspective);
     }
   }, []);
 
@@ -106,6 +114,18 @@ export function MoodProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem('calm_preferred_mood', newMood);
     } catch {}
+  };
+
+  const setDrivePerspective = (p: DrivePerspective) => {
+    setDrivePerspectiveState(p);
+    try {
+      localStorage.setItem('calm_drive_perspective', p);
+    } catch {}
+  };
+
+  const toggleDrivePerspective = () => {
+    const next = drivePerspective === 'cockpit' ? 'third-person' : 'cockpit';
+    setDrivePerspective(next);
   };
 
   const toggleNextMood = () => {
@@ -121,6 +141,9 @@ export function MoodProvider({ children }: { children: React.ReactNode }) {
         config: MOOD_CONFIGS[mood],
         setMood,
         toggleNextMood,
+        drivePerspective,
+        setDrivePerspective,
+        toggleDrivePerspective,
       }}
     >
       {children}

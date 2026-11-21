@@ -1,4 +1,5 @@
 export type MoodMode = 'rose' | 'night' | 'rain' | 'focus' | 'drive';
+export type DrivePerspective = 'third-person' | 'cockpit';
 
 export interface MoodConfig {
   id: MoodMode;

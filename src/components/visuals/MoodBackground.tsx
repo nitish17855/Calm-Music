@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useMood } from '@/context/MoodContext';
 
 interface Particle {
@@ -16,28 +16,43 @@ interface Particle {
   vRot?: number;
 }
 
-interface TreeSilhouette {
-  x: number;
-  y: number;
-  scale: number;
+interface RoadsideFeature {
+  z: number;
   side: 'left' | 'right';
-  type: number;
+  type: 'boulder' | 'milestone' | 'reflector';
+  scale: number;
 }
 
 interface MoodBackgroundProps {
   audioEnergy?: number;
 }
 
+// Prometheus Inspired 5-Color Palette:
+// 1. #244855 - Deep Petrol Teal
+// 2. #E64833 - Sunburst Terracotta / Crimson
+// 3. #874F41 - Earthy Canyon Bronze
+// 4. #90AEAD - Atmospheric Sage / Dusty Cyan
+// 5. #FBE9D0 - Soft Warm Cream
+
 export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { mood, config } = useMood();
+  const { mood, config, drivePerspective } = useMood();
   const animationFrameRef = useRef<number | null>(null);
+  
+  // Real-time HUD readout state for the driving interface
+  const [hudSpeed, setHudSpeed] = useState(75);
+
+  // Use a ref for audioEnergy to avoid recreating canvas loop on every audio tick
+  const audioEnergyRef = useRef(audioEnergy);
+  useEffect(() => {
+    audioEnergyRef.current = audioEnergy;
+  }, [audioEnergy]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -56,29 +71,56 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
       initParticles();
-      initTrees();
     };
 
     window.addEventListener('resize', handleResize);
 
-    // Particle state
-    let particles: Particle[] = [];
-    let trees: TreeSilhouette[] = [];
-    let roadOffset = 0;
+    // -------------------------------------------------------------
+    // INTERACTIVE DRIVING DYNAMICS STATE
+    // -------------------------------------------------------------
+    let targetSpeed = 75; // km/h (range: 30 to 155)
+    let currentSpeed = 75;
+    let targetSteer = 0; // -1 (left) to +1 (right)
+    let currentSteer = 0;
+    let carLaneOffset = 0; // lateral position on highway
+    let roadProgress = 0;
+    let roadDistance = 0;
 
-    const initTrees = () => {
-      trees = [];
-      const treeCount = 18;
-      for (let i = 0; i < treeCount; i++) {
-        trees.push({
-          x: i % 2 === 0 ? width * 0.15 * Math.random() : width * (0.85 + Math.random() * 0.15),
-          y: height * 0.4 + (i / treeCount) * (height * 0.6),
-          scale: 0.6 + (i / treeCount) * 0.8,
+    const activeKeys: Record<string, boolean> = {};
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
+      if (['ArrowUp', 'KeyW', 'ArrowDown', 'KeyS', 'ArrowLeft', 'KeyA', 'ArrowRight', 'KeyD'].includes(e.code)) {
+        activeKeys[e.code] = true;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      delete activeKeys[e.code];
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    // Roadside features rushing past (speed sensation without blocking trees)
+    let roadsideFeatures: RoadsideFeature[] = [];
+    const initRoadside = () => {
+      roadsideFeatures = [];
+      for (let i = 0; i < 18; i++) {
+        roadsideFeatures.push({
+          z: i / 18,
           side: i % 2 === 0 ? 'left' : 'right',
-          type: Math.floor(Math.random() * 3),
+          type: i % 3 === 0 ? 'milestone' : i % 3 === 1 ? 'reflector' : 'boulder',
+          scale: 0.65 + Math.random() * 0.7,
         });
       }
     };
+    initRoadside();
+
+    // Particle state
+    let particles: Particle[] = [];
 
     const initParticles = () => {
       particles = [];
@@ -86,7 +128,6 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
 
       for (let i = 0; i < count; i++) {
         if (mood === 'rain') {
-          // Rain stays fast and brisk as preferred by user
           particles.push({
             x: Math.random() * width,
             y: Math.random() * height,
@@ -98,281 +139,898 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
             baseAlpha: 0.2 + Math.random() * 0.4,
           });
         } else if (mood === 'night') {
-          // Night stars: ultra-slow, peaceful, NO dizzying speed
           particles.push({
             x: Math.random() * width,
             y: Math.random() * height,
-            vx: (Math.random() - 0.5) * 0.04,
-            vy: (Math.random() - 0.5) * 0.04,
-            size: 0.8 + Math.random() * 2,
-            alpha: 0.2 + Math.random() * 0.6,
-            baseAlpha: 0.2 + Math.random() * 0.6,
+            vx: (Math.random() - 0.5) * 0.006,
+            vy: (Math.random() - 0.5) * 0.006,
+            size: 0.8 + Math.random() * 1.6,
+            alpha: 0.2 + Math.random() * 0.5,
+            baseAlpha: 0.2 + Math.random() * 0.5,
           });
         } else if (mood === 'rose') {
-          // Rose petals: slow, serene, gentle floating drift
           particles.push({
             x: Math.random() * width,
             y: Math.random() * height,
-            vx: -0.15 + Math.random() * 0.3,
-            vy: 0.15 + Math.random() * 0.25,
-            size: 2.5 + Math.random() * 3.5,
-            alpha: 0.15 + Math.random() * 0.45,
-            baseAlpha: 0.15 + Math.random() * 0.45,
+            vx: -0.04 + Math.random() * 0.08,
+            vy: 0.06 + Math.random() * 0.08,
+            size: 2.2 + Math.random() * 2.8,
+            alpha: 0.15 + Math.random() * 0.35,
+            baseAlpha: 0.15 + Math.random() * 0.35,
             rotation: Math.random() * Math.PI * 2,
-            vRot: (Math.random() - 0.5) * 0.008,
+            vRot: (Math.random() - 0.5) * 0.004,
           });
         } else if (mood === 'drive') {
-          // Jungle Drive: soft glowing fireflies in the jungle canopy
           particles.push({
             x: Math.random() * width,
-            y: Math.random() * height * 0.7,
-            vx: (Math.random() - 0.5) * 0.1,
-            vy: -0.05 - Math.random() * 0.15,
-            size: 1.5 + Math.random() * 2.5,
-            alpha: 0.15 + Math.random() * 0.45,
-            baseAlpha: 0.15 + Math.random() * 0.45,
+            y: Math.random() * height * 0.72,
+            vx: (Math.random() - 0.5) * 0.015,
+            vy: -0.01 - Math.random() * 0.02,
+            size: 1.2 + Math.random() * 2.2,
+            alpha: 0.15 + Math.random() * 0.4,
+            baseAlpha: 0.15 + Math.random() * 0.4,
           });
         } else {
-          // Forest focus: slow, tranquil upward spores
           particles.push({
             x: Math.random() * width,
             y: Math.random() * height,
-            vx: (Math.random() - 0.5) * 0.08,
-            vy: -0.1 - Math.random() * 0.15,
-            size: 2 + Math.random() * 3.5,
-            alpha: 0.15 + Math.random() * 0.45,
-            baseAlpha: 0.15 + Math.random() * 0.45,
+            vx: (Math.random() - 0.5) * 0.01,
+            vy: -0.02 - Math.random() * 0.03,
+            size: 1.5 + Math.random() * 2.2,
+            alpha: 0.15 + Math.random() * 0.35,
+            baseAlpha: 0.15 + Math.random() * 0.35,
           });
         }
       }
     };
 
     initParticles();
-    initTrees();
 
     let time = 0;
+    let hudUpdateCounter = 0;
 
-    const render = () => {
-      time += 0.01;
+    // Helper: Draw Mercedes-Benz Three-Pointed Star Chrome Emblem
+    const drawMercedesStar = (x: number, y: number, radius: number) => {
+      ctx.save();
+      ctx.translate(x, y);
 
-      // 1. Draw smooth background gradient
-      const bgGradient = ctx.createLinearGradient(0, 0, width * 0.8, height);
-      bgGradient.addColorStop(0, config.gradient.from);
-      bgGradient.addColorStop(0.5, config.gradient.via);
-      bgGradient.addColorStop(1, config.gradient.to);
+      // Outer chrome ring
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = radius * 0.18;
+      ctx.stroke();
 
-      ctx.fillStyle = bgGradient;
-      ctx.fillRect(0, 0, width, height);
+      // Inner ring shadow
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.88, 0, Math.PI * 2);
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
-      // 2. Ambient glowing aura
-      const auraGradient = ctx.createRadialGradient(
-        width * 0.5 + Math.sin(time * 0.3) * (width * 0.1),
-        height * 0.4,
-        40,
-        width * 0.5,
-        height * 0.5,
-        Math.max(width, height) * 0.65
-      );
+      // Three Star Points: 12 o'clock, 4 o'clock, 8 o'clock
+      const angles = [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6];
+      const starR = radius * 0.85;
 
-      const glowEnergy = 1 + audioEnergy * 0.5;
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.8;
 
-      if (mood === 'drive') {
-        auraGradient.addColorStop(0, `rgba(16, 185, 129, ${0.08 * glowEnergy})`);
-        auraGradient.addColorStop(0.5, `rgba(5, 150, 105, ${0.04 * glowEnergy})`);
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else if (mood === 'rose') {
-        auraGradient.addColorStop(0, `rgba(244, 63, 94, ${0.1 * glowEnergy})`);
-        auraGradient.addColorStop(0.5, `rgba(190, 24, 93, ${0.05 * glowEnergy})`);
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else if (mood === 'night') {
-        auraGradient.addColorStop(0, `rgba(99, 102, 241, ${0.09 * glowEnergy})`);
-        auraGradient.addColorStop(0.5, `rgba(79, 70, 229, ${0.04 * glowEnergy})`);
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else if (mood === 'rain') {
-        auraGradient.addColorStop(0, `rgba(56, 189, 248, ${0.1 * glowEnergy})`);
-        auraGradient.addColorStop(0.5, `rgba(14, 116, 144, ${0.05 * glowEnergy})`);
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else {
-        auraGradient.addColorStop(0, `rgba(52, 211, 153, ${0.08 * glowEnergy})`);
-        auraGradient.addColorStop(0.5, `rgba(16, 185, 129, ${0.04 * glowEnergy})`);
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      for (let i = 0; i < 3; i++) {
+        const a = angles[i];
+        const tipX = Math.cos(a) * starR;
+        const tipY = Math.sin(a) * starR;
+
+        const leftA = a + 0.32;
+        const rightA = a - 0.32;
+        const baseR = radius * 0.2;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(tipX, tipY);
+        ctx.lineTo(Math.cos(leftA) * baseR, Math.sin(leftA) * baseR);
+        ctx.closePath();
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(tipX, tipY);
+        ctx.lineTo(Math.cos(rightA) * baseR, Math.sin(rightA) * baseR);
+        ctx.closePath();
+        ctx.fillStyle = '#f8fafc';
+        ctx.fill();
+        ctx.stroke();
       }
 
-      ctx.fillStyle = auraGradient;
-      ctx.fillRect(0, 0, width, height);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.15, 0, Math.PI * 2);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fill();
 
-      // If Jungle Drive mode, render the car cruising through the vast jungle
-      if (mood === 'drive' && !prefersReducedMotion) {
-        roadOffset = (roadOffset + 1.2) % 60;
+      ctx.restore();
+    };
 
-        // Distant jungle canopy mountain silhouettes
-        ctx.fillStyle = '#020b05';
-        ctx.beginPath();
-        ctx.moveTo(0, height * 0.48);
-        for (let x = 0; x <= width; x += 50) {
-          const y = height * 0.44 + Math.sin(x * 0.003 + 1) * 30 + Math.cos(x * 0.007) * 15;
-          ctx.lineTo(x, y);
+    // Render loop
+    const render = () => {
+      time += 0.008;
+      const curAudio = audioEnergyRef.current;
+
+      // -------------------------------------------------------------
+      // SCENIC CANYON DRIVE (Interactive Driving with Real Speed & Steering)
+      // -------------------------------------------------------------
+      if (mood === 'drive') {
+        // 1. Process User Driving Input (Arrow Keys / W A S D)
+        const isAccelerating = activeKeys['ArrowUp'] || activeKeys['KeyW'];
+        const isBraking = activeKeys['ArrowDown'] || activeKeys['KeyS'];
+        const isSteeringLeft = activeKeys['ArrowLeft'] || activeKeys['KeyA'];
+        const isSteeringRight = activeKeys['ArrowRight'] || activeKeys['KeyD'];
+
+        if (isAccelerating) {
+          targetSpeed = Math.min(150, targetSpeed + 0.9);
+        } else if (isBraking) {
+          targetSpeed = Math.max(30, targetSpeed - 1.4);
+        } else {
+          // Smoothly relax toward comfortable cruising speed
+          targetSpeed += (75 - targetSpeed) * 0.004;
         }
+
+        if (isSteeringLeft) {
+          targetSteer = Math.max(-1.0, targetSteer - 0.08);
+        } else if (isSteeringRight) {
+          targetSteer = Math.min(1.0, targetSteer + 0.08);
+        } else {
+          // Auto-center spring return
+          targetSteer *= 0.82;
+        }
+
+        // Smooth physics interpolation
+        currentSpeed += (targetSpeed - currentSpeed) * 0.08;
+        currentSteer += (targetSteer - currentSteer) * 0.12;
+
+        hudUpdateCounter++;
+        if (hudUpdateCounter % 15 === 0) {
+          setHudSpeed(Math.round(currentSpeed));
+        }
+
+        // Lane position & road distance
+        const speedRatio = currentSpeed / 75;
+        carLaneOffset = Math.max(-width * 0.16, Math.min(width * 0.16, carLaneOffset + currentSteer * (currentSpeed * 0.035)));
+        roadProgress = (roadProgress + 0.004 * speedRatio) % 1.0;
+        roadDistance += currentSpeed * 0.12;
+
+        // Subtle organic winding canyon curvature
+        const canyonCurve = Math.sin(roadDistance * 0.0006) * 35;
+        const roadCenterX = width * 0.5 - carLaneOffset + canyonCurve;
+
+        const horizonY = height * 0.48;
+        const bottomW = Math.min(width * 0.84, 980);
+
+        // 2. SKY: Panoramic Sunset Sky
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+        skyGrad.addColorStop(0, '#244855');    // Zenith: Deep Petrol Teal
+        skyGrad.addColorStop(0.48, '#355c68'); // Petrol to sage blend
+        skyGrad.addColorStop(0.72, '#90AEAD'); // Atmospheric Sage
+        skyGrad.addColorStop(0.88, '#E64833'); // Sunburst Terracotta Glow
+        skyGrad.addColorStop(1, '#FBE9D0');    // Horizon: Soft Warm Cream
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, width, horizonY + 2);
+
+        // Radiant Sunburst Flare at Horizon Pass
+        const sunFlare = ctx.createRadialGradient(
+          roadCenterX,
+          horizonY - 6,
+          8,
+          roadCenterX,
+          horizonY - 6,
+          width * 0.5
+        );
+        sunFlare.addColorStop(0, 'rgba(251, 233, 208, 0.9)');
+        sunFlare.addColorStop(0.35, 'rgba(230, 72, 51, 0.45)');
+        sunFlare.addColorStop(0.75, 'rgba(144, 174, 173, 0.15)');
+        sunFlare.addColorStop(1, 'rgba(36, 72, 85, 0)');
+        ctx.fillStyle = sunFlare;
+        ctx.fillRect(0, 0, width, horizonY + 2);
+
+        // Sweeping Clouds
+        ctx.save();
+        ctx.fillStyle = 'rgba(251, 233, 208, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(width * 0.22, height * 0.14, width * 0.26, 18, 0.05, 0, Math.PI * 2);
+        ctx.ellipse(width * 0.76, height * 0.19, width * 0.32, 24, -0.04, 0, Math.PI * 2);
+        ctx.ellipse(width * 0.46, height * 0.26, width * 0.22, 16, 0.02, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(230, 72, 51, 0.22)';
+        ctx.beginPath();
+        ctx.ellipse(width * 0.23, height * 0.15, width * 0.22, 11, 0.05, 0, Math.PI * 2);
+        ctx.ellipse(width * 0.77, height * 0.20, width * 0.28, 15, -0.04, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 3. DISTANT MOUNTAINS WITH CANYON PASS AT HORIZON (Natural V-notch)
+        ctx.fillStyle = '#244855';
+        ctx.beginPath();
+        ctx.moveTo(0, horizonY);
+        // Left alpine mountains slope down to pass
+        ctx.lineTo(0, horizonY - 35);
+        ctx.lineTo(width * 0.15, horizonY - 55);
+        ctx.lineTo(width * 0.32, horizonY - 32);
+        ctx.lineTo(roadCenterX - 18, horizonY - 4);
+        ctx.lineTo(roadCenterX, horizonY); // Road joins horizon at this pass!
+        // Right alpine mountains slope up
+        ctx.lineTo(roadCenterX + 18, horizonY - 4);
+        ctx.lineTo(width * 0.68, horizonY - 36);
+        ctx.lineTo(width * 0.85, horizonY - 58);
+        ctx.lineTo(width, horizonY - 38);
+        ctx.lineTo(width, horizonY);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(144, 174, 173, 0.45)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Mid-Distance Terracotta Canyon Mesas & Ridges
+        ctx.fillStyle = '#874F41';
+        ctx.beginPath();
+        ctx.moveTo(0, horizonY);
+        ctx.lineTo(0, horizonY - 14);
+        ctx.lineTo(width * 0.22, horizonY - 18);
+        ctx.lineTo(width * 0.38, horizonY - 10);
+        ctx.lineTo(roadCenterX - 10, horizonY - 2);
+        ctx.lineTo(roadCenterX, horizonY);
+        ctx.lineTo(roadCenterX + 10, horizonY - 2);
+        ctx.lineTo(width * 0.62, horizonY - 12);
+        ctx.lineTo(width * 0.78, horizonY - 20);
+        ctx.lineTo(width, horizonY - 12);
         ctx.lineTo(width, height);
         ctx.lineTo(0, height);
-        ctx.fill();
-
-        // Moonlight / jungle mist in horizon
-        const moonGrad = ctx.createRadialGradient(width * 0.5, height * 0.38, 10, width * 0.5, height * 0.4, 180);
-        moonGrad.addColorStop(0, 'rgba(167, 243, 208, 0.12)');
-        moonGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = moonGrad;
-        ctx.fillRect(0, 0, width, height);
-
-        // Towering Jungle Tree Silhouettes (Left & Right Layers)
-        ctx.fillStyle = '#03140a';
-        trees.forEach((t) => {
-          ctx.save();
-          ctx.translate(t.x, t.y);
-          ctx.beginPath();
-          // Pine / jungle palm canopy
-          const trunkW = 6 * t.scale;
-          const trunkH = 120 * t.scale;
-          ctx.fillRect(-trunkW / 2, 0, trunkW, trunkH);
-
-          // Foliage
-          ctx.beginPath();
-          ctx.arc(0, -10 * t.scale, 40 * t.scale, 0, Math.PI * 2);
-          ctx.arc(-20 * t.scale, 10 * t.scale, 30 * t.scale, 0, Math.PI * 2);
-          ctx.arc(20 * t.scale, 10 * t.scale, 30 * t.scale, 0, Math.PI * 2);
-          ctx.fillStyle = '#04180d';
-          ctx.fill();
-          ctx.restore();
-        });
-
-        // Perspective Road: Narrow at horizon (height * 0.48), wide at bottom
-        const horizonY = height * 0.48;
-        const horizonW = 40;
-        const bottomW = Math.min(width * 0.5, 480);
-        const roadCenterX = width * 0.5;
-
-        // Dark asphalt
-        ctx.beginPath();
-        ctx.moveTo(roadCenterX - horizonW / 2, horizonY);
-        ctx.lineTo(roadCenterX + horizonW / 2, horizonY);
-        ctx.lineTo(roadCenterX + bottomW / 2, height);
-        ctx.lineTo(roadCenterX - bottomW / 2, height);
         ctx.closePath();
-        ctx.fillStyle = '#06130b';
         ctx.fill();
 
-        // Road edge borders
-        ctx.strokeStyle = 'rgba(52, 211, 153, 0.15)';
+        ctx.strokeStyle = 'rgba(230, 72, 51, 0.35)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Dashed Centerline gliding smoothly
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
+        // 4. VAST OPEN DESERT CANYON EXPANSE
+        const groundGrad = ctx.createLinearGradient(0, horizonY, 0, height);
+        groundGrad.addColorStop(0, '#874F41');
+        groundGrad.addColorStop(0.35, '#6f3c30');
+        groundGrad.addColorStop(0.7, '#582d23');
+        groundGrad.addColorStop(1, '#441f17');
+        ctx.fillStyle = groundGrad;
+        ctx.fillRect(0, horizonY, width, height - horizonY);
+
+        // Geological Sand & Rock Contours across the open desert
+        ctx.save();
+        ctx.strokeStyle = 'rgba(230, 72, 51, 0.2)';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(0, horizonY + 30);
+        ctx.quadraticCurveTo(width * 0.2, horizonY + 50, roadCenterX - bottomW * 0.45, height);
+        ctx.moveTo(width, horizonY + 40);
+        ctx.quadraticCurveTo(width * 0.8, horizonY + 60, roadCenterX + bottomW * 0.45, height);
+        ctx.stroke();
+        ctx.restore();
+
+        // 5. THE HIGHWAY: Joined Seamlessly to Horizon Vanishing Point!
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(roadCenterX, horizonY); // Starts at the exact horizon vanishing point!
+        ctx.lineTo(roadCenterX + bottomW / 2, height);
+        ctx.lineTo(roadCenterX - bottomW / 2, height);
+        ctx.closePath();
+
+        const roadGrad = ctx.createLinearGradient(0, horizonY, 0, height);
+        roadGrad.addColorStop(0, '#2b3c46');
+        roadGrad.addColorStop(0.3, '#24343d');
+        roadGrad.addColorStop(0.7, '#1b272f');
+        roadGrad.addColorStop(1, '#131d22');
+        ctx.fillStyle = roadGrad;
+        ctx.fill();
+
+        // Warm Cream Painted Outer Edge Lines (#FBE9D0)
+        ctx.strokeStyle = '#FBE9D0';
         ctx.lineWidth = 2.5;
-        ctx.setLineDash([18, 22]);
-        ctx.lineDashOffset = -roadOffset;
         ctx.beginPath();
         ctx.moveTo(roadCenterX, horizonY);
-        ctx.lineTo(roadCenterX, height);
+        ctx.lineTo(roadCenterX - bottomW / 2, height);
+        ctx.moveTo(roadCenterX, horizonY);
+        ctx.lineTo(roadCenterX + bottomW / 2, height);
         ctx.stroke();
-        ctx.setLineDash([]); // Reset line dash
 
-        // Headlight Beams illuminating the road ahead
-        const carY = height * 0.73 + Math.sin(time * 2) * 1.5; // Gentle cruising suspension bob
-        const carX = roadCenterX;
+        // Dirt Shoulder Borders
+        ctx.strokeStyle = 'rgba(230, 72, 51, 0.45)';
+        ctx.lineWidth = 5.0;
+        ctx.beginPath();
+        ctx.moveTo(roadCenterX - 1, horizonY);
+        ctx.lineTo(roadCenterX - bottomW / 2 - 16, height);
+        ctx.moveTo(roadCenterX + 1, horizonY);
+        ctx.lineTo(roadCenterX + bottomW / 2 + 16, height);
+        ctx.stroke();
 
-        ctx.save();
-        const beamGrad = ctx.createRadialGradient(
-          carX,
-          carY - 10,
-          10,
-          carX,
-          carY - 140,
-          180
+        // 3D Perspective Centerline: Speeds up dynamically with car speed!
+        const stripeCount = 18;
+        for (let s = 0; s < stripeCount; s++) {
+          const z = ((s / stripeCount) + roadProgress) % 1.0;
+          if (z < 0.015) continue;
+
+          const segY = horizonY + Math.pow(z, 2.3) * (height - horizonY);
+          const segLength = 4 + Math.pow(z, 2.0) * 55;
+          const segWidth = 0.8 + z * 4.2;
+          const segAlpha = Math.min(0.95, z * 1.3);
+
+          ctx.fillStyle = `rgba(230, 72, 51, ${segAlpha})`;
+          ctx.beginPath();
+          ctx.roundRect(
+            roadCenterX - segWidth / 2,
+            segY,
+            segWidth,
+            segLength,
+            segWidth / 2
+          );
+          ctx.fill();
+        }
+
+        // 6. ROADSIDE BOULDERS & MARKERS RUSHING PAST (True Sensation of Speed!)
+        roadsideFeatures.forEach((feat) => {
+          feat.z = (feat.z + 0.005 * speedRatio) % 1.0;
+          if (feat.z < 0.03) return;
+
+          const featY = horizonY + Math.pow(feat.z, 2.2) * (height - horizonY);
+          const roadWAtY = Math.pow(feat.z, 2.2) * bottomW;
+          const featScale = Math.pow(feat.z, 1.8) * feat.scale;
+          const isLeft = feat.side === 'left';
+          const featX = isLeft
+            ? roadCenterX - roadWAtY / 2 - 14 - featScale * 25
+            : roadCenterX + roadWAtY / 2 + 14 + featScale * 25;
+
+          ctx.save();
+          ctx.translate(featX, featY);
+
+          if (feat.type === 'boulder') {
+            // Canyon Sandstone Boulder (#874F41 with sunlit #E64833 facet)
+            ctx.fillStyle = '#6e382c';
+            ctx.beginPath();
+            ctx.moveTo(-16 * featScale, 0);
+            ctx.lineTo(-8 * featScale, -18 * featScale);
+            ctx.lineTo(12 * featScale, -22 * featScale);
+            ctx.lineTo(20 * featScale, 0);
+            ctx.closePath();
+            ctx.fill();
+
+            // Sunlit facet
+            ctx.fillStyle = '#E64833';
+            ctx.beginPath();
+            ctx.moveTo(-8 * featScale, -18 * featScale);
+            ctx.lineTo(12 * featScale, -22 * featScale);
+            ctx.lineTo(6 * featScale, -10 * featScale);
+            ctx.closePath();
+            ctx.fill();
+          } else if (feat.type === 'milestone') {
+            // White/Cream Highway Milestone Post with Red Reflector
+            ctx.fillStyle = '#FBE9D0';
+            ctx.fillRect(-3 * featScale, -24 * featScale, 6 * featScale, 24 * featScale);
+            ctx.fillStyle = '#E64833';
+            ctx.fillRect(-3 * featScale, -22 * featScale, 6 * featScale, 6 * featScale);
+          } else {
+            // Roadside Cat-Eye Reflector Post
+            ctx.fillStyle = '#1c2830';
+            ctx.fillRect(-2 * featScale, -20 * featScale, 4 * featScale, 20 * featScale);
+            ctx.fillStyle = isLeft ? '#FBE9D0' : '#E64833';
+            ctx.fillRect(-3 * featScale, -18 * featScale, 6 * featScale, 5 * featScale);
+          }
+          ctx.restore();
+        });
+
+        // Atmospheric Depth Haze at Horizon Vanishing Point
+        const horizonHaze = ctx.createRadialGradient(
+          roadCenterX,
+          horizonY,
+          1,
+          roadCenterX,
+          horizonY,
+          65
         );
-        beamGrad.addColorStop(0, `rgba(254, 240, 138, ${0.25 + audioEnergy * 0.2})`);
-        beamGrad.addColorStop(0.6, `rgba(254, 240, 138, ${0.08 + audioEnergy * 0.1})`);
-        beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
+        horizonHaze.addColorStop(0, 'rgba(251, 233, 208, 0.85)');
+        horizonHaze.addColorStop(0.35, 'rgba(230, 72, 51, 0.4)');
+        horizonHaze.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = horizonHaze;
         ctx.beginPath();
-        ctx.moveTo(carX - 18, carY - 8);
-        ctx.lineTo(carX - 70, horizonY + 20);
-        ctx.lineTo(carX + 70, horizonY + 20);
-        ctx.lineTo(carX + 18, carY - 8);
-        ctx.closePath();
-        ctx.fillStyle = beamGrad;
+        ctx.arc(roadCenterX, horizonY, 65, 0, Math.PI * 2);
         ctx.fill();
+
         ctx.restore();
 
-        // The Car (Third-person rear perspective)
-        ctx.save();
-        ctx.translate(carX, carY);
+        // -------------------------------------------------------------
+        // PERSPECTIVE 1: COCKPIT / DRIVER'S VIEW (Interactive Steering Wheel!)
+        // -------------------------------------------------------------
+        if (drivePerspective === 'cockpit') {
+          // Subtle road vibration scaling with speed
+          const roadVibration = Math.sin(time * (currentSpeed * 0.12)) * 0.8;
+          const cabinBob = Math.sin(time * 1.5) * 1.0 + roadVibration;
+          const accelPitch = isAccelerating ? -2.5 : isBraking ? 3.0 : 0;
 
-        // Car Shadow
-        ctx.beginPath();
-        ctx.ellipse(0, 18, 38, 10, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-        ctx.fill();
+          // A. Long Sculpted GT Hood
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(roadCenterX - 250, height * 0.73 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX, height * 0.70 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX + 250, height * 0.73 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX + 360, height * 0.82 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX - 360, height * 0.82 + cabinBob + accelPitch);
+          ctx.closePath();
 
-        // Car Body (Aerodynamic silhouette)
-        ctx.fillStyle = '#0c121e';
-        ctx.beginPath();
-        ctx.roundRect(-30, -12, 60, 26, 8);
-        ctx.fill();
+          const hoodGrad = ctx.createLinearGradient(0, height * 0.70, 0, height * 0.82);
+          hoodGrad.addColorStop(0, '#1c2b33');
+          hoodGrad.addColorStop(0.5, '#121d23');
+          hoodGrad.addColorStop(1, '#0b1318');
+          ctx.fillStyle = hoodGrad;
+          ctx.fill();
 
-        // Car Roof / Rear Glass Window
-        ctx.fillStyle = '#05080e';
-        ctx.beginPath();
-        ctx.roundRect(-22, -26, 44, 16, 5);
-        ctx.fill();
+          // Hood Power Domes
+          ctx.strokeStyle = 'rgba(230, 72, 51, 0.3)';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(roadCenterX - 75, height * 0.72 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX - 140, height * 0.82 + cabinBob + accelPitch);
+          ctx.moveTo(roadCenterX + 75, height * 0.72 + cabinBob + accelPitch);
+          ctx.lineTo(roadCenterX + 140, height * 0.82 + cabinBob + accelPitch);
+          ctx.stroke();
 
-        // Rear window tint reflection
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
-        ctx.beginPath();
-        ctx.moveTo(-18, -14);
-        ctx.lineTo(-12, -23);
-        ctx.lineTo(12, -23);
-        ctx.lineTo(18, -14);
-        ctx.closePath();
-        ctx.fill();
+          // Heat Extraction Vents
+          ctx.fillStyle = '#080d11';
+          ctx.fillRect(roadCenterX - 95, height * 0.75 + cabinBob + accelPitch, 30, 5);
+          ctx.fillRect(roadCenterX + 65, height * 0.75 + cabinBob + accelPitch, 30, 5);
 
-        // Glowing Ruby Taillights (Left & Right)
-        const tailGlow = 8 + audioEnergy * 8;
-        // Left light
-        ctx.shadowBlur = tailGlow;
-        ctx.shadowColor = 'rgba(239, 68, 68, 0.9)';
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.roundRect(-26, 0, 12, 5, 2);
-        ctx.fill();
+          // Chrome Mercedes-Benz Star Hood Ornament leading ahead
+          drawMercedesStar(roadCenterX, height * 0.705 + cabinBob + accelPitch, 6.5);
+          ctx.restore();
 
-        // Right light
-        ctx.beginPath();
-        ctx.roundRect(14, 0, 12, 5, 2);
-        ctx.fill();
-        ctx.shadowBlur = 0; // Reset shadow
+          // B. Windshield Frame & A-Pillars
+          ctx.fillStyle = '#111920';
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(width * 0.13, 0);
+          ctx.lineTo(width * 0.07, height);
+          ctx.lineTo(0, height);
+          ctx.closePath();
+          ctx.fill();
 
-        // Rear License Plate soft glow
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-9, 4, 18, 6);
+          ctx.beginPath();
+          ctx.moveTo(width, 0);
+          ctx.lineTo(width * 0.87, 0);
+          ctx.lineTo(width * 0.93, height);
+          ctx.lineTo(width, height);
+          ctx.closePath();
+          ctx.fill();
 
-        ctx.restore();
+          // Rearview Mirror
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(roadCenterX - 85, 14, 170, 42, 12);
+          ctx.fillStyle = '#152028';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(251, 233, 208, 0.3)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          const mirrorGrad = ctx.createLinearGradient(0, 18, 0, 52);
+          mirrorGrad.addColorStop(0, '#244855');
+          mirrorGrad.addColorStop(0.5, '#E64833');
+          mirrorGrad.addColorStop(1, '#874F41');
+          ctx.fillStyle = mirrorGrad;
+          ctx.beginPath();
+          ctx.roundRect(roadCenterX - 79, 18, 158, 34, 8);
+          ctx.fill();
+
+          ctx.fillStyle = '#0d151a';
+          ctx.fillRect(roadCenterX - 6, 0, 12, 15);
+          ctx.restore();
+
+          // C. Dashboard Cowl (Saddle Tan Leather #874F41 with Cream Stitching)
+          const dashY = height * 0.77 + cabinBob;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(0, height);
+          ctx.lineTo(0, dashY + 30);
+          ctx.quadraticCurveTo(width * 0.28, dashY - 14, width * 0.5, dashY + 8);
+          ctx.quadraticCurveTo(width * 0.72, dashY + 18, width, dashY + 12);
+          ctx.lineTo(width, height);
+          ctx.closePath();
+
+          const dashGrad = ctx.createLinearGradient(0, dashY - 20, 0, height);
+          dashGrad.addColorStop(0, '#5a3127');
+          dashGrad.addColorStop(0.3, '#3d1f18');
+          dashGrad.addColorStop(1, '#1e0e0a');
+          ctx.fillStyle = dashGrad;
+          ctx.fill();
+
+          // Cream Double Stitching Line
+          ctx.strokeStyle = 'rgba(251, 233, 208, 0.45)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(width * 0.1, dashY + 34);
+          ctx.quadraticCurveTo(width * 0.28, dashY - 8, width * 0.5, dashY + 14);
+          ctx.quadraticCurveTo(width * 0.72, dashY + 24, width * 0.92, dashY + 18);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Ambient LED Ribbon
+          const ambientPulse = 0.65 + curAudio * 0.35;
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = `rgba(230, 72, 51, ${ambientPulse * 0.9})`;
+          ctx.strokeStyle = `rgba(230, 72, 51, ${ambientPulse})`;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(width * 0.1, dashY + 30);
+          ctx.quadraticCurveTo(width * 0.28, dashY - 12, width * 0.5, dashY + 10);
+          ctx.quadraticCurveTo(width * 0.72, dashY + 20, width * 0.92, dashY + 14);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+
+          // D. Digital Instrument Cluster with Real Interactive Speedometer & Tachometer!
+          const clusterX = Math.max(160, width * 0.28);
+          const clusterY = dashY - 8;
+          const clusterW = 230;
+          const clusterH = 70;
+
+          ctx.save();
+          ctx.translate(clusterX - clusterW / 2, clusterY);
+          
+          ctx.fillStyle = '#10171d';
+          ctx.beginPath();
+          ctx.roundRect(-8, -12, clusterW + 16, clusterH + 16, 12);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(251, 233, 208, 0.25)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          ctx.fillStyle = '#0a1014';
+          ctx.beginPath();
+          ctx.roundRect(0, -6, clusterW, clusterH, 8);
+          ctx.fill();
+
+          // Speedometer (Left Dial) - Real-time Interactive Speed Readout!
+          ctx.fillStyle = '#FBE9D0';
+          ctx.font = 'bold 21px monospace';
+          ctx.fillText(`${Math.round(currentSpeed)}`, 28, 30);
+          ctx.font = '9px sans-serif';
+          ctx.fillStyle = 'rgba(251, 233, 208, 0.7)';
+          ctx.fillText('KM/H', 32, 44);
+
+          // Tachometer (Right Dial) - Dynamic Engine RPM calculating from throttle & speed!
+          const rpm = Math.round(1400 + (currentSpeed / 150) * 3400 + (isAccelerating ? 750 : 0) + curAudio * 350);
+          ctx.fillStyle = rpm > 4200 ? '#ef4444' : '#E64833';
+          ctx.font = 'bold 16px monospace';
+          ctx.fillText(`${rpm}`, clusterW - 70, 28);
+          ctx.font = '9px sans-serif';
+          ctx.fillStyle = 'rgba(230, 72, 51, 0.75)';
+          ctx.fillText('RPM', clusterW - 55, 42);
+
+          // Center Status HUD
+          ctx.fillStyle = isAccelerating ? '#22c55e' : isBraking ? '#ef4444' : '#90AEAD';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillText(isAccelerating ? 'SPORT ACCEL' : isBraking ? 'BRAKE ACTIVE' : 'MERCEDES GT', clusterW / 2 - 28, 22);
+          ctx.fillStyle = '#FBE9D0';
+          ctx.font = '8px sans-serif';
+          ctx.fillText('DYNAMIC CRUISE', clusterW / 2 - 30, 36);
+
+          ctx.restore();
+
+          // E. INTERACTIVE STEERING WHEEL (Free & Rotating Smoothly with A/D or Arrow Keys!)
+          const wheelX = clusterX;
+          const wheelY = height * 0.88 + cabinBob;
+          const wheelR = 108;
+
+          ctx.save();
+          ctx.translate(wheelX, wheelY);
+          
+          // Physical steering rotation!
+          ctx.rotate(currentSteer * 0.55); // Rotates up to ~32 degrees smoothly!
+
+          // Steering Wheel Rim
+          ctx.beginPath();
+          ctx.arc(0, 0, wheelR, 0, Math.PI * 2);
+          ctx.lineWidth = 22;
+          ctx.strokeStyle = '#422017';
+          ctx.stroke();
+
+          // Inner rim trim
+          ctx.beginPath();
+          ctx.arc(0, 0, wheelR - 10, 0, Math.PI * 2);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = 'rgba(248, 250, 252, 0.25)';
+          ctx.stroke();
+
+          // 3 Brushed Aluminum Spokes
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(-wheelR + 10, -10, wheelR * 0.55, 20);
+          ctx.fillRect(wheelR * 0.35, -10, wheelR * 0.55, 20);
+          ctx.fillRect(-12, wheelR * 0.3, 24, wheelR * 0.6);
+
+          // Center Hub (Airbag & Mercedes Star)
+          ctx.beginPath();
+          ctx.arc(0, 0, 38, 0, Math.PI * 2);
+          ctx.fillStyle = '#2a140e';
+          ctx.fill();
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          // Mercedes Star in center of rotating wheel
+          drawMercedesStar(0, 0, 18);
+
+          ctx.restore();
+          ctx.restore();
+
+        } else {
+          // -------------------------------------------------------------
+          // PERSPECTIVE 2: THIRD-PERSON CHASE VIEW (Fastback GT with Dynamic Drift)
+          // -------------------------------------------------------------
+          const carY = height * 0.74 + Math.sin(time * 1.5) * 1.0;
+          const carX = width * 0.5 + carLaneOffset * 0.5;
+
+          // Dust Drift Plume (Expands at higher speed!)
+          ctx.save();
+          const dustSize = 1 + (currentSpeed / 75) * 0.4;
+          ctx.fillStyle = 'rgba(230, 72, 51, 0.25)';
+          ctx.beginPath();
+          ctx.ellipse(carX - 52, carY + 14, 34 * dustSize, 10 * dustSize, -0.15, 0, Math.PI * 2);
+          ctx.ellipse(carX + 52, carY + 14, 34 * dustSize, 10 * dustSize, 0.15, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(251, 233, 208, 0.2)';
+          ctx.beginPath();
+          ctx.ellipse(carX - 44, carY + 18, 26 * dustSize, 8 * dustSize, -0.1, 0, Math.PI * 2);
+          ctx.ellipse(carX + 44, carY + 18, 26 * dustSize, 8 * dustSize, 0.1, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // Headlight Beams illuminating the canyon road ahead
+          ctx.save();
+          const lightGlow = 0.25 + curAudio * 0.2;
+          const beamGrad = ctx.createRadialGradient(
+            carX,
+            carY - 15,
+            12,
+            carX,
+            carY - 160,
+            220
+          );
+          beamGrad.addColorStop(0, `rgba(251, 233, 208, ${lightGlow})`);
+          beamGrad.addColorStop(0.5, `rgba(230, 72, 51, ${lightGlow * 0.4})`);
+          beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+          ctx.beginPath();
+          ctx.moveTo(carX - 28, carY - 12);
+          ctx.lineTo(carX - 110, horizonY + 20);
+          ctx.lineTo(carX + 110, horizonY + 20);
+          ctx.lineTo(carX + 28, carY - 12);
+          ctx.closePath();
+          ctx.fillStyle = beamGrad;
+          ctx.fill();
+          ctx.restore();
+
+          // The Fastback GT Coupe (Body leans into turns with currentSteer!)
+          ctx.save();
+          ctx.translate(carX, carY);
+          ctx.rotate(currentSteer * 0.04); // Dynamic body banking!
+
+          // Ground Contact Shadow
+          ctx.beginPath();
+          ctx.ellipse(0, 24, 58, 14, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(8, 12, 16, 0.95)';
+          ctx.fill();
+
+          // Performance Tires
+          ctx.fillStyle = '#080c10';
+          ctx.beginPath();
+          ctx.roundRect(-55, 2, 22, 22, 5);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.roundRect(33, 2, 22, 22, 5);
+          ctx.fill();
+
+          // Gold/Chrome Wheel Rim Lips & Calipers
+          ctx.strokeStyle = '#FBE9D0';
+          ctx.lineWidth = 1.6;
+          ctx.strokeRect(-54, 4, 6, 18);
+          ctx.strokeRect(48, 4, 6, 18);
+          ctx.fillStyle = '#fbbf24';
+          ctx.fillRect(-51, 9, 3, 8);
+          ctx.fillRect(48, 9, 3, 8);
+
+          // Lower Diffuser & Quad Chrome Exhausts
+          ctx.fillStyle = '#0a1016';
+          ctx.beginPath();
+          ctx.roundRect(-46, 8, 92, 14, 4);
+          ctx.fill();
+
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(-16, 8); ctx.lineTo(-16, 22);
+          ctx.moveTo(16, 8); ctx.lineTo(16, 22);
+          ctx.stroke();
+
+          // Quad Exhaust Pipes
+          const exhaustGlow = (currentSpeed / 150) * 0.6 + curAudio * 0.4;
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 1.5;
+          ctx.fillStyle = `rgba(230, 72, 51, ${0.4 + exhaustGlow})`;
+          ctx.beginPath();
+          ctx.arc(-34, 15, 4.5, 0, Math.PI * 2);
+          ctx.arc(-24, 15, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(24, 15, 4.5, 0, Math.PI * 2);
+          ctx.arc(34, 15, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Muscular Body Haunches
+          const bodyGrad = ctx.createLinearGradient(0, -18, 0, 10);
+          bodyGrad.addColorStop(0, '#223844');
+          bodyGrad.addColorStop(0.5, '#16252e');
+          bodyGrad.addColorStop(1, '#0e181e');
+          ctx.fillStyle = bodyGrad;
+          ctx.beginPath();
+          ctx.roundRect(-50, -16, 100, 32, 9);
+          ctx.fill();
+
+          ctx.strokeStyle = 'rgba(251, 233, 208, 0.45)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(-48, -10);
+          ctx.quadraticCurveTo(-38, -14, -26, -14);
+          ctx.moveTo(48, -10);
+          ctx.quadraticCurveTo(38, -14, 26, -14);
+          ctx.stroke();
+
+          // Chrome Bumper Bar
+          const bumperGrad = ctx.createLinearGradient(0, 2, 0, 8);
+          bumperGrad.addColorStop(0, '#f8fafc');
+          bumperGrad.addColorStop(0.5, '#cbd5e1');
+          bumperGrad.addColorStop(1, '#64748b');
+          ctx.fillStyle = bumperGrad;
+          ctx.beginPath();
+          ctx.roundRect(-48, 2, 96, 5, 2.5);
+          ctx.fill();
+
+          // Sloping Fastback Rear Window
+          ctx.fillStyle = '#0d161d';
+          ctx.beginPath();
+          ctx.roundRect(-34, -36, 68, 25, 7);
+          ctx.fill();
+
+          const glassGrad = ctx.createLinearGradient(0, -34, 0, -14);
+          glassGrad.addColorStop(0, 'rgba(144, 174, 173, 0.5)');
+          glassGrad.addColorStop(0.6, 'rgba(251, 233, 208, 0.35)');
+          glassGrad.addColorStop(1, 'rgba(230, 72, 51, 0.3)');
+          ctx.fillStyle = glassGrad;
+          ctx.beginPath();
+          ctx.moveTo(-30, -14);
+          ctx.lineTo(-22, -33);
+          ctx.lineTo(22, -33);
+          ctx.lineTo(30, -14);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(-24, -27); ctx.lineTo(24, -27);
+          ctx.moveTo(-26, -21); ctx.lineTo(26, -21);
+          ctx.stroke();
+
+          // Ducktail Spoiler Lip
+          ctx.fillStyle = '#1c303b';
+          ctx.beginPath();
+          ctx.moveTo(-34, -14);
+          ctx.lineTo(34, -14);
+          ctx.lineTo(32, -11);
+          ctx.lineTo(-32, -11);
+          ctx.closePath();
+          ctx.fill();
+
+          // Recessed Fascia Panel & Triple Vertical Ruby Taillights
+          ctx.fillStyle = '#060a0e';
+          ctx.beginPath();
+          ctx.roundRect(-42, -9, 84, 11, 3);
+          ctx.fill();
+
+          const tailBloom = 12 + curAudio * 15;
+          ctx.shadowBlur = tailBloom;
+          ctx.shadowColor = 'rgba(230, 72, 51, 0.95)';
+          ctx.fillStyle = '#ff2222';
+
+          for (let b = 0; b < 3; b++) {
+            ctx.fillRect(-38 + b * 6, -8, 4, 9);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-37 + b * 6, -6, 2, 5);
+            ctx.fillStyle = '#ff2222';
+          }
+
+          for (let b = 0; b < 3; b++) {
+            ctx.fillRect(23 + b * 6, -8, 4, 9);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(24 + b * 6, -6, 2, 5);
+            ctx.fillStyle = '#ff2222';
+          }
+          ctx.shadowBlur = 0;
+
+          drawMercedesStar(0, -3.5, 6.5);
+
+          ctx.fillStyle = '#080d12';
+          ctx.fillRect(-12, 3.5, 24, 7);
+          ctx.fillStyle = '#FBE9D0';
+          ctx.font = 'bold 5px monospace';
+          ctx.fillText('SCENIC GT', -11, 8.5);
+
+          ctx.restore();
+        }
+      } else {
+        // OTHER MODES (Rose, Night, Rain, Focus)
+        const bgGradient = ctx.createLinearGradient(0, 0, width * 0.8, height);
+        bgGradient.addColorStop(0, config.gradient.from);
+        bgGradient.addColorStop(0.5, config.gradient.via);
+        bgGradient.addColorStop(1, config.gradient.to);
+
+        ctx.fillStyle = bgGradient;
+        ctx.fillRect(0, 0, width, height);
+
+        const auraGradient = ctx.createRadialGradient(
+          width * 0.5 + Math.sin(time * 0.2) * (width * 0.08),
+          height * 0.4,
+          40,
+          width * 0.5,
+          height * 0.5,
+          Math.max(width, height) * 0.65
+        );
+
+        const glowEnergy = 1 + curAudio * 0.4;
+        if (mood === 'rose') {
+          auraGradient.addColorStop(0, `rgba(244, 63, 94, ${0.08 * glowEnergy})`);
+          auraGradient.addColorStop(0.5, `rgba(190, 24, 93, ${0.04 * glowEnergy})`);
+          auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else if (mood === 'night') {
+          auraGradient.addColorStop(0, `rgba(99, 102, 241, ${0.08 * glowEnergy})`);
+          auraGradient.addColorStop(0.5, `rgba(79, 70, 229, ${0.03 * glowEnergy})`);
+          auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else if (mood === 'rain') {
+          auraGradient.addColorStop(0, `rgba(56, 189, 248, ${0.09 * glowEnergy})`);
+          auraGradient.addColorStop(0.5, `rgba(14, 116, 144, ${0.04 * glowEnergy})`);
+          auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else {
+          auraGradient.addColorStop(0, `rgba(52, 211, 153, ${0.07 * glowEnergy})`);
+          auraGradient.addColorStop(0.5, `rgba(16, 185, 129, ${0.03 * glowEnergy})`);
+          auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        }
+
+        ctx.fillStyle = auraGradient;
+        ctx.fillRect(0, 0, width, height);
       }
 
       if (prefersReducedMotion) {
         return;
       }
 
-      // 3. Render and update ambient particles with CALM, STEADY SPEED (no fast eye-strain movement)
+      // 7. RENDER PARTICLES
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-
-        // Pulse alpha gently with music, NOT speed
-        const pulse = Math.sin(time * 1.5 + i) * 0.15;
-        const currentAlpha = Math.max(0.05, Math.min(0.85, p.baseAlpha + pulse + audioEnergy * 0.25));
+        const smoothPulse = Math.sin(time * 0.4 + i) * 0.08;
+        const currentAlpha = Math.max(
+          0.05,
+          Math.min(0.8, p.baseAlpha + smoothPulse + curAudio * 0.15)
+        );
 
         if (mood === 'rain') {
-          // Rain falls briskly (user approved)
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
           ctx.lineTo(p.x + p.vx * 2, p.y + (p.length || 15));
@@ -381,7 +1039,6 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           ctx.lineCap = 'round';
           ctx.stroke();
 
-          // Move raindrop without harsh multiplier
           p.x += p.vx;
           p.y += p.vy;
 
@@ -391,12 +1048,11 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           }
           if (p.x < 0) p.x = width;
         } else if (mood === 'night') {
-          // Starlight: ultra-calm, slow drift, zero eye strain
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(224, 231, 255, ${currentAlpha})`;
-          ctx.shadowBlur = 6;
-          ctx.shadowColor = 'rgba(199, 210, 254, 0.6)';
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = 'rgba(199, 210, 254, 0.4)';
           ctx.fill();
           ctx.shadowBlur = 0;
 
@@ -408,7 +1064,6 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           if (p.y < 0) p.y = height;
           if (p.y > height) p.y = 0;
         } else if (mood === 'rose') {
-          // Rose petals: slow tranquil glide
           ctx.save();
           ctx.translate(p.x, p.y);
           if (p.rotation !== undefined) {
@@ -417,13 +1072,12 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           ctx.beginPath();
           ctx.ellipse(0, 0, p.size, p.size * 0.6, 0, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(251, 113, 133, ${currentAlpha})`;
-          ctx.shadowBlur = 8;
-          ctx.shadowColor = 'rgba(244, 63, 94, 0.5)';
+          ctx.shadowBlur = 5;
+          ctx.shadowColor = 'rgba(244, 63, 94, 0.4)';
           ctx.fill();
           ctx.restore();
 
-          // Gentle constant drift without speed jerks
-          p.x += p.vx + Math.sin(time + i) * 0.15;
+          p.x += p.vx;
           p.y += p.vy;
           if (p.rotation !== undefined && p.vRot) {
             p.rotation += p.vRot;
@@ -435,17 +1089,34 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
           }
           if (p.x < 0) p.x = width;
           if (p.x > width) p.x = 0;
-        } else {
-          // Jungle Drive fireflies or Forest Focus spores: peaceful floating
+        } else if (mood === 'drive') {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(167, 243, 208, ${currentAlpha})`;
-          ctx.shadowBlur = 8;
-          ctx.shadowColor = 'rgba(52, 211, 153, 0.5)';
+          ctx.fillStyle = `rgba(251, 233, 208, ${currentAlpha})`;
+          ctx.shadowBlur = 5;
+          ctx.shadowColor = 'rgba(230, 72, 51, 0.4)';
           ctx.fill();
           ctx.shadowBlur = 0;
 
-          p.x += p.vx + Math.sin(time + i) * 0.15;
+          p.x += p.vx;
+          p.y += p.vy;
+
+          if (p.y < -10) {
+            p.y = height + 10;
+            p.x = Math.random() * width;
+          }
+          if (p.x < 0) p.x = width;
+          if (p.x > width) p.x = 0;
+        } else {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(167, 243, 208, ${currentAlpha})`;
+          ctx.shadowBlur = 5;
+          ctx.shadowColor = 'rgba(52, 211, 153, 0.35)';
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          p.x += p.vx;
           p.y += p.vy;
 
           if (p.y < -10) {
@@ -467,16 +1138,37 @@ export default function MoodBackground({ audioEnergy = 0 }: MoodBackgroundProps)
         cancelAnimationFrame(animationFrameRef.current);
       }
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       mediaQuery.removeEventListener('change', handleMotionChange);
     };
-  }, [mood, config, audioEnergy]);
+  }, [mood, config, drivePerspective]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      aria-hidden="true"
-      className="fixed inset-0 pointer-events-none -z-10 transition-opacity duration-1000 ease-in-out"
-      style={{ width: '100vw', height: '100vh' }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none -z-10 transition-opacity duration-1000 ease-in-out"
+        style={{ width: '100vw', height: '100vh' }}
+      />
+
+      {/* Interactive Driving HUD Controls Hint (When in Scenic Drive mode) */}
+      {mood === 'drive' && (
+        <div className="fixed top-20 right-4 z-30 pointer-events-auto hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl glass-panel text-slate-300 text-xs border border-white/10 shadow-lg animate-in fade-in duration-500">
+          <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>{hudSpeed} KM/H</span>
+          </div>
+          <span className="text-white/20">|</span>
+          <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+            <span className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono">W / S</span>
+            <span>Speed</span>
+            <span className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono ml-1">A / D</span>
+            <span>Steer</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

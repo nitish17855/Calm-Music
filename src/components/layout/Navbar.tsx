@@ -20,7 +20,7 @@ const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
 export default function Navbar() {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { mood, setMood, config } = useMood();
+  const { mood, setMood, config, drivePerspective, toggleDrivePerspective } = useMood();
   const { toggleZenMode } = useZen();
 
   const navLinks = [
@@ -86,6 +86,18 @@ export default function Navbar() {
         {/* Right Section: Zen Mode / Mood Switcher / Auth */}
         <div className="flex items-center gap-2 sm:gap-2.5">
           
+          {/* BMW Perspective Toggle (when in Jungle Drive mode) */}
+          {mood === 'drive' && (
+            <button
+              onClick={toggleDrivePerspective}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium glass-pill text-emerald-300 hover:text-white border border-emerald-500/30 transition-all hover:bg-emerald-500/10"
+              title="Toggle BMW View: Driver Cockpit / Chase (Press V)"
+            >
+              <span>{drivePerspective === 'cockpit' ? '🚘 Cockpit' : '🚗 Chase'}</span>
+              <span className="hidden lg:inline text-[10px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">V</span>
+            </button>
+          )}
+
           {/* Zen View / Scenic Mode Toggle Button */}
           <button
             onClick={toggleZenMode}
