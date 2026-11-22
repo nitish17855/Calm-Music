@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { CURATED_AMBIENT_TRACKS, decryptSaavnMediaUrl } from '../src/services/musicService';
-import { formatTime } from '../src/lib/utils';
+import { formatTime, normalizeTrackTitle, extractPrimarySinger } from '../src/lib/utils';
 
 describe('Calm Music API - Unit & Route Tests', () => {
   test('Direct Audio Resolver: decryptSaavnMediaUrl extracts 320kbps direct stream', () => {
@@ -10,6 +10,24 @@ describe('Calm Music API - Unit & Route Tests', () => {
     assert.ok(directUrl.includes('saavncdn.com'), 'Decrypted URL points to high-speed CDN');
     assert.ok(directUrl.endsWith('_320.mp4'), 'Decrypted URL upgraded to 320kbps audio');
   });
+
+  test('Autoplay Deduplication: normalizeTrackTitle catches duplicate song variations', () => {
+    const base = normalizeTrackTitle('Raabta');
+    assert.strictEqual(base, 'raabta');
+    assert.strictEqual(normalizeTrackTitle('Raabta (Title Track)'), base);
+    assert.strictEqual(normalizeTrackTitle('Raabta - Lofi Mix'), base);
+    assert.strictEqual(normalizeTrackTitle('Raabta (Slowed + Reverb)'), base);
+    assert.strictEqual(normalizeTrackTitle('Raabta [Official Audio]'), base);
+    assert.strictEqual(normalizeTrackTitle('Khamoshiyan (Unplugged)'), 'khamoshiyan');
+    assert.notStrictEqual(normalizeTrackTitle('Tum Hi Ho'), base);
+  });
+
+  test('Autoplay Singer Extraction: extractPrimarySinger resolves lead vocalist', () => {
+    assert.strictEqual(extractPrimarySinger('Arijit Singh, Shreya Ghoshal - Raabta'), 'Arijit Singh');
+    assert.strictEqual(extractPrimarySinger('Adil, Arpit Bala - Keychain Laalu'), 'Adil');
+    assert.strictEqual(extractPrimarySinger('Atif Aslam'), 'Atif Aslam');
+  });
+
   test('Music Search Service: should fallback gracefully to curated library', () => {
     assert.ok(Array.isArray(CURATED_AMBIENT_TRACKS), 'Curated tracks should be an array');
     assert.strictEqual(CURATED_AMBIENT_TRACKS.length > 0, true, 'Curated tracks should not be empty');

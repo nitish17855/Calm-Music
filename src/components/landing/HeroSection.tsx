@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useMood } from '@/context/MoodContext';
 import { usePlayer } from '@/context/PlayerContext';
 import { Track } from '@/types';
-import { formatTime } from '@/lib/utils';
+import { formatTime, normalizeTrackTitle } from '@/lib/utils';
 import Image from 'next/image';
 import {
   Search as SearchIcon,
@@ -218,15 +218,19 @@ export default function HeroSection() {
                 return (
                   <div
                     key={track.id}
-                    onClick={() =>
-                      isCurrent
-                        ? togglePlay()
-                        : playTrack(
-                            track,
-                            undefined,
-                            tracks.filter((t) => t.id !== track.id)
-                          )
-                    }
+                    onClick={() => {
+                      if (isCurrent) {
+                        togglePlay();
+                      } else {
+                        const currentNorm = normalizeTrackTitle(track.title);
+                        const distinctSiblings = tracks.filter((t) => {
+                          if (t.id === track.id) return false;
+                          const candidateNorm = normalizeTrackTitle(t.title);
+                          return candidateNorm.length === 0 || candidateNorm !== currentNorm;
+                        });
+                        playTrack(track, undefined, distinctSiblings);
+                      }
+                    }}
                     className={`group p-2.5 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all ${
                       isCurrent
                         ? 'bg-white/15 text-white ring-1 ring-white/20'

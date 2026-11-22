@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { Track, RepeatMode } from '@/types';
 import { CURATED_AMBIENT_TRACKS } from '@/services/musicService';
+import { normalizeTrackTitle, extractPrimarySinger } from '@/lib/utils';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -403,29 +404,121 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isPlaying]);
 
-  // Handle Play Track
-  const playTrack = useCallback((track: Track, newQueue?: Track[], newAutoplayPool?: Track[]) => {
-    setCurrentTrack(track);
-    if (newAutoplayPool) {
-      autoplayPoolRef.current = newAutoplayPool;
-      setAutoplayPoolState(newAutoplayPool);
-    }
+  // Helper to fetch similar tracks prioritizing primary singer (Approach 2 fallback)
+  const fetchSimilarTracks = useCallback(async (track: Track): Promise<Track[]> => {
+    try {
+      const singer = extractPrimarySinger(track.artistName);
+      const query =
+        singer && singer.length > 2
+          ? singer
+          : track.albumName &&
+            track.albumName !== 'YouTube Official Stream' &&
+            track.albumName !== 'Audius Release'
+          ? track.albumName
+          : track.title.replace(/\([^)]*\)|\[[^\]]*\]/g, '').trim();
 
-    if (newQueue && newQueue.length > 0) {
-      setQueue(newQueue);
-      const idx = newQueue.findIndex((t) => t.id === track.id);
-      setQueueIndex(idx !== -1 ? idx : 0);
-    } else {
-      setQueue((prev) => {
-        const existingIdx = prev.findIndex((t) => t.id === track.id);
-        if (existingIdx !== -1) {
-          setQueueIndex(existingIdx);
-          return prev;
-        }
-        setQueueIndex(prev.length);
-        return [...prev, track];
+      if (!query) return [];
+
+      const res = await fetch(`/api/music/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) return [];
+
+      const data = await res.json();
+      const candidates: Track[] = data.tracks || [];
+
+      // Avoid repeating tracks already in queue or identical titles to current track
+      const trackNorm = normalizeTrackTitle(track.title);
+      const existingIds = new Set(queueRef.current.map((t) => t.id));
+      existingIds.add(track.id);
+
+      const filtered = candidates.filter((t) => {
+        if (existingIds.has(t.id)) return false;
+        const candNorm = normalizeTrackTitle(t.title);
+        return candNorm.length === 0 || candNorm !== trackNorm;
       });
+
+      return filtered.slice(0, 14);
+    } catch (err) {
+      console.warn('Autoplay fetchSimilarTracks notice:', err);
+      return [];
     }
+  }, []);
+
+  const isPrefetchingRef = useRef<boolean>(false);
+
+  // Background prefetch: loads matching singer songs into autoplayPool while current track plays
+  const prefetchSimilarTracks = useCallback(
+    async (track: Track) => {
+      if (isPrefetchingRef.current) return;
+      isPrefetchingRef.current = true;
+      try {
+        const similar = await fetchSimilarTracks(track);
+        if (similar.length > 0) {
+          const currentPool = autoplayPoolRef.current;
+          const poolIds = new Set(currentPool.map((t) => t.id));
+          const trackNorm = normalizeTrackTitle(track.title);
+
+          const distinctNew = similar.filter((t) => {
+            if (poolIds.has(t.id)) return false;
+            const candNorm = normalizeTrackTitle(t.title);
+            return candNorm.length === 0 || candNorm !== trackNorm;
+          });
+
+          if (distinctNew.length > 0) {
+            const merged = [...currentPool, ...distinctNew].slice(0, 15);
+            autoplayPoolRef.current = merged;
+            setAutoplayPoolState(merged);
+          }
+        }
+      } catch (e) {
+        console.warn('Prefetch similar error:', e);
+      } finally {
+        isPrefetchingRef.current = false;
+      }
+    },
+    [fetchSimilarTracks]
+  );
+
+  // Handle Play Track
+  const playTrack = useCallback(
+    (track: Track, newQueue?: Track[], newAutoplayPool?: Track[]) => {
+      setCurrentTrack(track);
+
+      if (newAutoplayPool) {
+        // Instant Dedup: remove any versions of the same song from incoming pool
+        const trackNorm = normalizeTrackTitle(track.title);
+        const cleanedPool = newAutoplayPool.filter((t) => {
+          if (t.id === track.id) return false;
+          const candNorm = normalizeTrackTitle(t.title);
+          return candNorm.length === 0 || candNorm !== trackNorm;
+        });
+
+        autoplayPoolRef.current = cleanedPool;
+        setAutoplayPoolState(cleanedPool);
+
+        // If pool has fewer than 2 distinct songs, prefetch singer songs in background right now (0ms latency later!)
+        if (isAutoplayRef.current && cleanedPool.length < 2) {
+          prefetchSimilarTracks(track);
+        }
+      } else if (isAutoplayRef.current && autoplayPoolRef.current.length < 2) {
+        // Standalone song played: prefetch singer songs in background immediately
+        prefetchSimilarTracks(track);
+      }
+
+      if (newQueue && newQueue.length > 0) {
+        setQueue(newQueue);
+        const idx = newQueue.findIndex((t) => t.id === track.id);
+        setQueueIndex(idx !== -1 ? idx : 0);
+      } else {
+        setQueue((prev) => {
+          const existingIdx = prev.findIndex((t) => t.id === track.id);
+          if (existingIdx !== -1) {
+            setQueueIndex(existingIdx);
+            return prev;
+          }
+          setQueueIndex(prev.length);
+          return [...prev, track];
+        });
+      }
 
     const isYouTubeTrack = track.source === 'youtube' || !!extractYouTubeId(track);
 
@@ -626,51 +719,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isMuted, volume]);
 
-  // Helper to fetch similar tracks by artist or album (Approach 2 fallback)
-  const fetchSimilarTracks = useCallback(async (track: Track): Promise<Track[]> => {
-    try {
-      const rawArtist = track.artistName || '';
-      const artistPart = rawArtist.split(' - ')[0] || rawArtist;
-      const primaryArtist = artistPart.split(/[,&/]| ft\.? | feat\.? /i)[0]?.trim();
-
-      let query = '';
-      if (
-        primaryArtist &&
-        primaryArtist.length > 2 &&
-        primaryArtist !== 'Various Artists' &&
-        primaryArtist !== 'Solo artist'
-      ) {
-        query = primaryArtist;
-      } else if (
-        track.albumName &&
-        track.albumName !== 'YouTube Official Stream' &&
-        track.albumName !== 'Audius Release'
-      ) {
-        query = track.albumName;
-      } else {
-        query = track.title.replace(/\([^)]*\)|\[[^\]]*\]/g, '').trim();
-      }
-
-      if (!query) return [];
-
-      const res = await fetch(`/api/music/search?q=${encodeURIComponent(query)}`);
-      if (!res.ok) return [];
-
-      const data = await res.json();
-      const candidates: Track[] = data.tracks || [];
-
-      // Avoid repeating tracks already in current queue
-      const existingIds = new Set(queueRef.current.map((t) => t.id));
-      existingIds.add(track.id);
-
-      const filtered = candidates.filter((t) => !existingIds.has(t.id));
-      return filtered.slice(0, 10);
-    } catch (err) {
-      console.warn('Autoplay fetchSimilarTracks notice:', err);
-      return [];
-    }
-  }, []);
-
   const nextTrack = useCallback(async () => {
     const currentQ = queueRef.current;
     if (currentQ.length === 0) return;
@@ -683,20 +731,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         nextIdx = 0;
       } else if (isAutoplayRef.current) {
         // --- AUTOPLAY WATERFALL (Approach 1 -> Approach 2) ---
-        // Step 1: Approach 1 - Search Context Pool
+        // Step 1: Approach 1 - Search Context Pool (Skip duplicate versions of current title)
         const pool = autoplayPoolRef.current;
-        if (pool && pool.length > 0) {
-          const [nextT, ...remaining] = pool;
+        const currentTitleNorm = normalizeTrackTitle(currentTrackRef.current?.title || '');
+
+        let chosenIdx = -1;
+        for (let i = 0; i < pool.length; i++) {
+          const candNorm = normalizeTrackTitle(pool[i].title);
+          if (!candNorm || candNorm !== currentTitleNorm) {
+            chosenIdx = i;
+            break;
+          }
+        }
+
+        if (chosenIdx !== -1) {
+          const nextT = pool[chosenIdx];
+          const remaining = pool.slice(chosenIdx + 1);
           autoplayPoolRef.current = remaining;
           setAutoplayPoolState(remaining);
 
           setQueue((prev) => [...prev, nextT]);
           setQueueIndex((prev) => prev + 1);
           playTrack(nextT);
+
+          // If remaining pool has fewer than 2 songs, top it up in background right now
+          if (remaining.length < 2) {
+            prefetchSimilarTracks(nextT);
+          }
           return;
         }
 
-        // Step 2: Approach 2 - Similar Tracks by Artist / Album Fallback
+        // Step 2: Approach 2 - Similar Tracks by Singer Fallback
         const current = currentTrackRef.current;
         if (current) {
           const similar = await fetchSimilarTracks(current);
@@ -726,7 +791,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setQueueIndex(nextIdx);
       playTrack(nextT);
     }
-  }, [playTrack, fetchSimilarTracks]);
+  }, [playTrack, fetchSimilarTracks, prefetchSimilarTracks]);
 
   // Keep nextTrackRef current for YouTube player callbacks
   useEffect(() => {
