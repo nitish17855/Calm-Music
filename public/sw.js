@@ -1,5 +1,5 @@
 // Service Worker for Calm Music PWA
-const CACHE_NAME = 'calm-music-v3';
+const CACHE_NAME = 'calm-music-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',

@@ -1,4 +1,5 @@
 import { Track } from '@/types';
+import CryptoJS from 'crypto-js';
 
 export const CURATED_AMBIENT_TRACKS: Track[] = [
   {
@@ -258,6 +259,109 @@ export async function searchAudius(query: string, limit = 10): Promise<Track[]> 
     }));
   } catch (err) {
     console.warn('Audius search error:', err);
+    return [];
+  }
+}
+
+// Decrypt direct 320kbps audio stream URL from JioSaavn encrypted media token
+export function decryptSaavnMediaUrl(encryptedUrl?: string): string {
+  if (!encryptedUrl) return '';
+  try {
+    const key = CryptoJS.enc.Utf8.parse('38346591');
+    const cipherParams = CryptoJS.lib.CipherParams.create({
+      ciphertext: CryptoJS.enc.Base64.parse(encryptedUrl),
+    });
+    const decrypted = CryptoJS.DES.decrypt(
+      cipherParams,
+      key,
+      {
+        mode: CryptoJS.mode.ECB,
+        padding: CryptoJS.pad.Pkcs7,
+      }
+    );
+    const rawUrl = decrypted.toString(CryptoJS.enc.Utf8);
+    // Upgrade 96kbps / 160kbps stream to crystal-clear 320kbps studio stream
+    return rawUrl.replace('_96.mp4', '_320.mp4').replace('_160.mp4', '_320.mp4');
+  } catch (err) {
+    console.warn('Saavn media decryption notice:', err);
+    return '';
+  }
+}
+
+// Search direct high-fidelity audio streams for Bollywood, Indie, Pop & Global tracks
+export async function searchSaavn(query: string, limit = 12): Promise<Track[]> {
+  try {
+    const cleanQ = query.trim();
+    if (!cleanQ) return [];
+
+    const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&q=${encodeURIComponent(
+      cleanQ
+    )}&_format=json&_marker=0&api_version=4&ctx=web6dot0&n=${limit}&p=1`;
+
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 3600 },
+    });
+
+    if (!res.ok) return [];
+
+    const text = await res.text();
+    const data = JSON.parse(text);
+    const results = data.results || [];
+    if (!Array.isArray(results)) return [];
+
+    const tracks: Track[] = [];
+
+    for (const item of results) {
+      const enc = item.more_info?.encrypted_media_url;
+      const directAudioUrl = decryptSaavnMediaUrl(enc);
+      if (!directAudioUrl) continue;
+
+      const title = (item.title || 'Untitled Song')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&');
+
+      const artist = (item.more_info?.primary_artists || item.subtitle || 'Featured Artist')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&');
+
+      const album = (item.more_info?.album || 'Official Studio Audio')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&');
+
+      // Request highest resolution 500x500 album art
+      const cover =
+        (item.image || '')
+          .replace('150x150.jpg', '500x500.jpg')
+          .replace('50x50.jpg', '500x500.jpg') ||
+        'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&q=80';
+
+      const duration = parseInt(item.more_info?.duration || '180', 10);
+
+      tracks.push({
+        id: `saavn-${item.id}`,
+        title,
+        artistName: artist,
+        albumName: album,
+        duration: isNaN(duration) ? 180 : duration,
+        audioUrl: directAudioUrl,
+        coverUrl: cover,
+        source: 'saavn',
+      });
+
+      if (tracks.length >= limit) break;
+    }
+
+    return tracks;
+  } catch (err) {
+    console.warn('Saavn search notice:', err);
     return [];
   }
 }

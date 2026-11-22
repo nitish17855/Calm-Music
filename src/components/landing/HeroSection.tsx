@@ -164,7 +164,7 @@ export default function HeroSection() {
         <div className="w-full max-w-2xl mt-3 relative z-20 flex items-center justify-center">
           <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl glass-panel text-xs text-slate-300 shadow-xl border border-white/10">
             <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
-            <span>Searching YouTube, Audius & Jamendo...</span>
+            <span>Searching Studio Audio, YouTube, Audius & Jamendo...</span>
           </div>
         </div>
       )}

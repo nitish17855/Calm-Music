@@ -25,7 +25,7 @@ export interface Track {
   duration: number; // in seconds
   audioUrl: string;
   coverUrl: string;
-  source: 'jamendo' | 'audius' | 'youtube' | 'custom' | 'local';
+  source: 'jamendo' | 'audius' | 'youtube' | 'custom' | 'local' | 'saavn';
   youtubeId?: string;
   waveform?: number[];
 }

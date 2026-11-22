@@ -1,9 +1,15 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { CURATED_AMBIENT_TRACKS } from '../src/services/musicService';
+import { CURATED_AMBIENT_TRACKS, decryptSaavnMediaUrl } from '../src/services/musicService';
 import { formatTime } from '../src/lib/utils';
 
 describe('Calm Music API - Unit & Route Tests', () => {
+  test('Direct Audio Resolver: decryptSaavnMediaUrl extracts 320kbps direct stream', () => {
+    const encToken = 'ID2ieOjCrwfgWvL5sXl4B1ImC5QfbsDyW0A6VTlbf59wQi29oFYrd2zBLBOLPi63aBZONPEqT/A+m64kwDtl/xw7tS9a8Gtq';
+    const directUrl = decryptSaavnMediaUrl(encToken);
+    assert.ok(directUrl.includes('saavncdn.com'), 'Decrypted URL points to high-speed CDN');
+    assert.ok(directUrl.endsWith('_320.mp4'), 'Decrypted URL upgraded to 320kbps audio');
+  });
   test('Music Search Service: should fallback gracefully to curated library', () => {
     assert.ok(Array.isArray(CURATED_AMBIENT_TRACKS), 'Curated tracks should be an array');
     assert.strictEqual(CURATED_AMBIENT_TRACKS.length > 0, true, 'Curated tracks should not be empty');

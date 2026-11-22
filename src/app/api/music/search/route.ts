@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
-import { searchJamendo, getJamendoByTag, searchAudius, searchYouTube, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
+import {
+  searchSaavn,
+  searchJamendo,
+  getJamendoByTag,
+  searchAudius,
+  searchYouTube,
+  CURATED_AMBIENT_TRACKS,
+} from '@/services/musicService';
 import { Track } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -13,22 +20,26 @@ export async function GET(request: Request) {
     let tracks: Track[] = [];
 
     if (query) {
-      // Search YouTube, Audius & Jamendo in parallel for rich multi-source music discovery
-      const [ytTracks, audiusTracks, jamendoTracks] = await Promise.all([
-        searchYouTube(query, 14).catch((err) => {
+      // Search Saavn (pure 320kbps background audio), YouTube, Audius & Jamendo in parallel
+      const [saavnTracks, ytTracks, audiusTracks, jamendoTracks] = await Promise.all([
+        searchSaavn(query, 14).catch((err) => {
+          console.warn('Saavn search fallback:', err);
+          return [];
+        }),
+        searchYouTube(query, 12).catch((err) => {
           console.warn('YouTube search fallback:', err);
           return [];
         }),
-        searchAudius(query, 10).catch((err) => {
+        searchAudius(query, 8).catch((err) => {
           console.warn('Audius search fallback:', err);
           return [];
         }),
-        searchJamendo(query, 10).catch((err) => {
+        searchJamendo(query, 8).catch((err) => {
           console.warn('Jamendo search fallback:', err);
           return [];
         }),
       ]);
-      tracks = [...ytTracks, ...audiusTracks, ...jamendoTracks];
+      tracks = [...saavnTracks, ...ytTracks, ...audiusTracks, ...jamendoTracks];
     } else if (tag) {
       tracks = await getJamendoByTag(tag, 24);
     } else {
