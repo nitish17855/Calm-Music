@@ -50,6 +50,10 @@ function extractYouTubeId(track: Track): string | null {
   return match ? match[1] : null;
 }
 
+// 44-byte silent WAV data URI to keep the mobile OS audio pipeline alive in background
+const SILENT_AUDIO_URI =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(CURATED_AMBIENT_TRACKS[0]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -77,10 +81,45 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const ytPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const nextTrackRef = useRef<() => void>(() => {});
   const repeatModeRef = useRef<RepeatMode>(repeatMode);
+  const isPlayingRef = useRef<boolean>(isPlaying);
+  const currentTrackRef = useRef<Track | null>(currentTrack);
 
   useEffect(() => {
     repeatModeRef.current = repeatMode;
   }, [repeatMode]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
+  // Keep background audio active when screen turns off or app minimizes
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && isPlayingRef.current) {
+        if (currentTrackRef.current?.source === 'youtube' && ytPlayerRef.current) {
+          setTimeout(() => {
+            try {
+              if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === 'function') {
+                ytPlayerRef.current.playVideo();
+              }
+              if (audioRef.current && audioRef.current.paused) {
+                audioRef.current.play().catch(() => {});
+              }
+            } catch (e) {}
+          }, 80);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Load YouTube IFrame API script once
   useEffect(() => {
@@ -128,7 +167,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
               // 1 = playing, 2 = paused, 0 = ended
               if (event.data === 1) {
                 setIsPlaying(true);
+                // Ensure native silent audio anchor keeps Android background lock
+                if (audioRef.current && audioRef.current.paused) {
+                  audioRef.current.play().catch(() => {});
+                }
               } else if (event.data === 2) {
+                // If paused due to mobile screen locking or app switching while meant to play, resume
+                if (isPlayingRef.current && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+                  try {
+                    ytPlayerRef.current.playVideo();
+                    return;
+                  } catch (e) {}
+                }
                 setIsPlaying(false);
               } else if (event.data === 0) {
                 if (repeatModeRef.current === 'one') {
@@ -335,11 +385,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const isYouTubeTrack = track.source === 'youtube' || !!extractYouTubeId(track);
 
     if (isYouTubeTrack) {
-      // Pause and clear HTML5 native audio
+      // Start silent native audio anchor to keep Android / iOS MediaSession and background process active
       if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.removeAttribute('src');
-        audioRef.current.load();
+        if (audioRef.current.src !== SILENT_AUDIO_URI) {
+          audioRef.current.src = SILENT_AUDIO_URI;
+        }
+        audioRef.current.loop = true;
+        audioRef.current.play().catch(() => {});
       }
 
       const ytId = extractYouTubeId(track);
@@ -422,9 +474,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             ytPlayerRef.current.pauseVideo();
           } catch (e) {}
         }
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
         setIsPlaying(false);
       } else {
         const ytId = currentTrack ? extractYouTubeId(currentTrack) : null;
+        if (audioRef.current) {
+          if (audioRef.current.src !== SILENT_AUDIO_URI) {
+            audioRef.current.src = SILENT_AUDIO_URI;
+          }
+          audioRef.current.loop = true;
+          audioRef.current.play().catch(() => {});
+        }
         if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === 'function') {
           try {
             const currentUrl = typeof ytPlayerRef.current.getVideoUrl === 'function' ? ytPlayerRef.current.getVideoUrl() : '';
@@ -454,7 +516,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      if (!audioRef.current.src && currentTrack) {
+      if (!audioRef.current.src && currentTrack && currentTrack.source !== 'youtube') {
         audioRef.current.src = currentTrack.audioUrl;
       }
       audioRef.current.play().then(() => {
@@ -762,6 +824,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           }
         }}
         onEnded={() => {
+          if (currentTrack?.source === 'youtube') return;
           if (repeatMode === 'one') {
             if (audioRef.current) {
               audioRef.current.currentTime = 0;
@@ -773,21 +836,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }}
       />
 
-      {/* Off-screen active YouTube IFrame Player (rendered in DOM tree so browsers do not throttle playback) */}
+      {/* Active YouTube IFrame Player (kept in DOM viewport with minimal footprint to prevent OS background culling) */}
       <div
         style={{
           position: 'fixed',
-          bottom: -500,
-          right: -500,
-          width: 240,
-          height: 160,
+          top: 0,
+          left: 0,
+          width: 1,
+          height: 1,
           pointerEvents: 'none',
-          opacity: 0.01,
-          zIndex: -100,
+          opacity: 0.001,
+          overflow: 'hidden',
+          zIndex: -999,
         }}
         aria-hidden="true"
       >
-        <div id="calm-yt-player" className="w-full h-full" />
+        <div id="calm-yt-player" style={{ width: '100%', height: '100%' }} />
       </div>
 
       {children}
