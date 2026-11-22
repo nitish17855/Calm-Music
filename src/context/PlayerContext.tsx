@@ -13,12 +13,14 @@ interface PlayerContextType {
   isMuted: boolean;
   repeatMode: RepeatMode;
   isShuffle: boolean;
+  isAutoplay: boolean;
   queue: Track[];
   queueIndex: number;
+  autoplayPool: Track[];
   audioEnergy: number;
   frequencyData: number[];
 
-  playTrack: (track: Track, newQueue?: Track[]) => void;
+  playTrack: (track: Track, newQueue?: Track[], newAutoplayPool?: Track[]) => void;
   playCustomStream: (url: string, title?: string, artist?: string) => void;
   playLocalFile: (file: File) => void;
   togglePlay: () => void;
@@ -27,6 +29,8 @@ interface PlayerContextType {
   toggleMute: () => void;
   toggleRepeat: () => void;
   toggleShuffle: () => void;
+  toggleAutoplay: () => void;
+  setAutoplayPool: (tracks: Track[]) => void;
   nextTrack: () => void;
   prevTrack: () => void;
   addToQueue: (track: Track) => void;
@@ -63,6 +67,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
+  const [isAutoplay, setIsAutoplay] = useState<boolean>(true);
+  const [autoplayPool, setAutoplayPoolState] = useState<Track[]>([]);
   const [queue, setQueue] = useState<Track[]>(CURATED_AMBIENT_TRACKS);
   const [queueIndex, setQueueIndex] = useState<number>(0);
   const [audioEnergy, setAudioEnergy] = useState<number>(0);
@@ -83,6 +89,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const repeatModeRef = useRef<RepeatMode>(repeatMode);
   const isPlayingRef = useRef<boolean>(isPlaying);
   const currentTrackRef = useRef<Track | null>(currentTrack);
+  const isAutoplayRef = useRef<boolean>(isAutoplay);
+  const autoplayPoolRef = useRef<Track[]>([]);
+  const queueRef = useRef<Track[]>(queue);
+  const queueIndexRef = useRef<number>(queueIndex);
+  const isShuffleRef = useRef<boolean>(isShuffle);
 
   useEffect(() => {
     repeatModeRef.current = repeatMode;
@@ -95,6 +106,35 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     currentTrackRef.current = currentTrack;
   }, [currentTrack]);
+
+  useEffect(() => {
+    isAutoplayRef.current = isAutoplay;
+  }, [isAutoplay]);
+
+  useEffect(() => {
+    autoplayPoolRef.current = autoplayPool;
+  }, [autoplayPool]);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  useEffect(() => {
+    queueIndexRef.current = queueIndex;
+  }, [queueIndex]);
+
+  useEffect(() => {
+    isShuffleRef.current = isShuffle;
+  }, [isShuffle]);
+
+  const toggleAutoplay = useCallback(() => {
+    setIsAutoplay((prev) => !prev);
+  }, []);
+
+  const setAutoplayPool = useCallback((tracks: Track[]) => {
+    autoplayPoolRef.current = tracks;
+    setAutoplayPoolState(tracks);
+  }, []);
 
   // Keep background audio active when screen turns off or app minimizes
   useEffect(() => {
@@ -364,8 +404,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [isPlaying]);
 
   // Handle Play Track
-  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
+  const playTrack = useCallback((track: Track, newQueue?: Track[], newAutoplayPool?: Track[]) => {
     setCurrentTrack(track);
+    if (newAutoplayPool) {
+      autoplayPoolRef.current = newAutoplayPool;
+      setAutoplayPoolState(newAutoplayPool);
+    }
+
     if (newQueue && newQueue.length > 0) {
       setQueue(newQueue);
       const idx = newQueue.findIndex((t) => t.id === track.id);
@@ -581,27 +626,107 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isMuted, volume]);
 
-  const nextTrack = useCallback(() => {
-    if (queue.length === 0) return;
-    let nextIdx = queueIndex + 1;
+  // Helper to fetch similar tracks by artist or album (Approach 2 fallback)
+  const fetchSimilarTracks = useCallback(async (track: Track): Promise<Track[]> => {
+    try {
+      const rawArtist = track.artistName || '';
+      const artistPart = rawArtist.split(' - ')[0] || rawArtist;
+      const primaryArtist = artistPart.split(/[,&/]| ft\.? | feat\.? /i)[0]?.trim();
 
-    if (isShuffle) {
-      nextIdx = Math.floor(Math.random() * queue.length);
-    } else if (nextIdx >= queue.length) {
-      if (repeatMode === 'all') {
+      let query = '';
+      if (
+        primaryArtist &&
+        primaryArtist.length > 2 &&
+        primaryArtist !== 'Various Artists' &&
+        primaryArtist !== 'Solo artist'
+      ) {
+        query = primaryArtist;
+      } else if (
+        track.albumName &&
+        track.albumName !== 'YouTube Official Stream' &&
+        track.albumName !== 'Audius Release'
+      ) {
+        query = track.albumName;
+      } else {
+        query = track.title.replace(/\([^)]*\)|\[[^\]]*\]/g, '').trim();
+      }
+
+      if (!query) return [];
+
+      const res = await fetch(`/api/music/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) return [];
+
+      const data = await res.json();
+      const candidates: Track[] = data.tracks || [];
+
+      // Avoid repeating tracks already in current queue
+      const existingIds = new Set(queueRef.current.map((t) => t.id));
+      existingIds.add(track.id);
+
+      const filtered = candidates.filter((t) => !existingIds.has(t.id));
+      return filtered.slice(0, 10);
+    } catch (err) {
+      console.warn('Autoplay fetchSimilarTracks notice:', err);
+      return [];
+    }
+  }, []);
+
+  const nextTrack = useCallback(async () => {
+    const currentQ = queueRef.current;
+    if (currentQ.length === 0) return;
+    let nextIdx = queueIndexRef.current + 1;
+
+    if (isShuffleRef.current) {
+      nextIdx = Math.floor(Math.random() * currentQ.length);
+    } else if (nextIdx >= currentQ.length) {
+      if (repeatModeRef.current === 'all') {
         nextIdx = 0;
+      } else if (isAutoplayRef.current) {
+        // --- AUTOPLAY WATERFALL (Approach 1 -> Approach 2) ---
+        // Step 1: Approach 1 - Search Context Pool
+        const pool = autoplayPoolRef.current;
+        if (pool && pool.length > 0) {
+          const [nextT, ...remaining] = pool;
+          autoplayPoolRef.current = remaining;
+          setAutoplayPoolState(remaining);
+
+          setQueue((prev) => [...prev, nextT]);
+          setQueueIndex((prev) => prev + 1);
+          playTrack(nextT);
+          return;
+        }
+
+        // Step 2: Approach 2 - Similar Tracks by Artist / Album Fallback
+        const current = currentTrackRef.current;
+        if (current) {
+          const similar = await fetchSimilarTracks(current);
+          if (similar.length > 0) {
+            const [firstT, ...restT] = similar;
+            autoplayPoolRef.current = restT;
+            setAutoplayPoolState(restT);
+
+            setQueue((prev) => [...prev, firstT]);
+            setQueueIndex((prev) => prev + 1);
+            playTrack(firstT);
+            return;
+          }
+        }
+
+        // Both steps exhausted, stop playback
+        setIsPlaying(false);
+        return;
       } else {
         setIsPlaying(false);
         return;
       }
     }
 
-    const nextT = queue[nextIdx];
+    const nextT = currentQ[nextIdx];
     if (nextT) {
       setQueueIndex(nextIdx);
       playTrack(nextT);
     }
-  }, [queue, queueIndex, isShuffle, repeatMode, playTrack]);
+  }, [playTrack, fetchSimilarTracks]);
 
   // Keep nextTrackRef current for YouTube player callbacks
   useEffect(() => {
@@ -788,8 +913,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         isMuted,
         repeatMode,
         isShuffle,
+        isAutoplay,
         queue,
         queueIndex,
+        autoplayPool,
         audioEnergy,
         frequencyData,
         playTrack,
@@ -801,6 +928,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         toggleMute,
         toggleRepeat,
         toggleShuffle,
+        toggleAutoplay,
+        setAutoplayPool,
         nextTrack,
         prevTrack,
         addToQueue,

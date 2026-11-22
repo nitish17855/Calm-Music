@@ -218,7 +218,15 @@ export default function HeroSection() {
                 return (
                   <div
                     key={track.id}
-                    onClick={() => (isCurrent ? togglePlay() : playTrack(track))}
+                    onClick={() =>
+                      isCurrent
+                        ? togglePlay()
+                        : playTrack(
+                            track,
+                            undefined,
+                            tracks.filter((t) => t.id !== track.id)
+                          )
+                    }
                     className={`group p-2.5 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all ${
                       isCurrent
                         ? 'bg-white/15 text-white ring-1 ring-white/20'

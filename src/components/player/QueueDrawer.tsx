@@ -3,7 +3,7 @@
 import React from 'react';
 import { usePlayer } from '@/context/PlayerContext';
 import { useMood } from '@/context/MoodContext';
-import { X, Play, Trash2, Music2 } from 'lucide-react';
+import { X, Play, Trash2, Music2, Sparkles } from 'lucide-react';
 import { formatTime } from '@/lib/utils';
 import Image from 'next/image';
 
@@ -13,16 +13,26 @@ interface QueueDrawerProps {
 }
 
 export default function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
-  const { queue, queueIndex, currentTrack, playTrack, removeFromQueue, clearQueue } = usePlayer();
+  const {
+    queue,
+    queueIndex,
+    currentTrack,
+    playTrack,
+    removeFromQueue,
+    clearQueue,
+    isAutoplay,
+    toggleAutoplay,
+    autoplayPool,
+  } = usePlayer();
   const { config } = useMood();
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-24 right-4 md:right-8 w-[calc(100vw-2rem)] sm:w-96 max-h-[70vh] z-50 glass-panel rounded-3xl p-5 flex flex-col shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-200">
+    <div className="fixed bottom-24 right-4 md:right-8 w-[calc(100vw-2rem)] sm:w-96 max-h-[75vh] z-50 glass-panel rounded-3xl p-5 flex flex-col shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-200">
       
       {/* Header */}
-      <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+      <div className="flex items-center justify-between pb-3 border-b border-white/10">
         <div className="flex items-center gap-2">
           <Music2 className="w-4 h-4 text-slate-300" />
           <h3 className="text-sm font-semibold text-white">Play Queue</h3>
@@ -48,8 +58,29 @@ export default function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
         </div>
       </div>
 
+      {/* Autoplay Toggle Bar */}
+      <div className="flex items-center justify-between py-2 px-3 mt-3 rounded-2xl bg-white/5 border border-white/5 text-xs text-slate-300">
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="font-medium text-white">Autoplay Radio</span>
+        </div>
+        <button
+          onClick={toggleAutoplay}
+          className={`w-9 h-5 rounded-full transition-colors relative flex items-center px-0.5 ${
+            isAutoplay ? 'bg-emerald-500' : 'bg-slate-700'
+          }`}
+          title={isAutoplay ? 'Disable Autoplay' : 'Enable Autoplay'}
+        >
+          <div
+            className={`w-4 h-4 rounded-full bg-white transition-transform ${
+              isAutoplay ? 'translate-x-4' : 'translate-x-0'
+            }`}
+          />
+        </button>
+      </div>
+
       {/* Queue Track List */}
-      <div className="overflow-y-auto mt-3 space-y-2 pr-1 max-h-[50vh]">
+      <div className="overflow-y-auto mt-3 space-y-2 pr-1 max-h-[40vh] scrollbar-thin">
         {queue.length === 0 ? (
           <div className="py-8 text-center text-xs text-slate-400">Queue is empty</div>
         ) : (
@@ -108,6 +139,34 @@ export default function QueueDrawer({ isOpen, onClose }: QueueDrawerProps) {
           })
         )}
       </div>
+
+      {/* Autoplay Up Next Preview */}
+      {isAutoplay && autoplayPool.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/10">
+          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+            <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-emerald-400" />
+              <span>Up Next (Autoplay Pool)</span>
+            </span>
+            <span className="text-[10px] text-emerald-400 font-mono">{autoplayPool.length} ready</span>
+          </div>
+          <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2.5">
+            <div className="relative w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-slate-800">
+              <Image
+                src={autoplayPool[0].coverUrl}
+                alt={autoplayPool[0].title}
+                fill
+                sizes="32px"
+                className="object-cover"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-emerald-200 truncate">{autoplayPool[0].title}</p>
+              <p className="text-[10px] text-slate-400 truncate">{autoplayPool[0].artistName}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
