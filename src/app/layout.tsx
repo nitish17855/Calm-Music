@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { MoodProvider } from '@/context/MoodContext';
 import { PlayerProvider } from '@/context/PlayerContext';
+import { PlaylistProvider } from '@/context/PlaylistContext';
 import { PwaProvider } from '@/components/pwa/PwaProvider';
 import AuthProvider from '@/components/providers/AuthProvider';
 import AppShell from '@/components/layout/AppShell';
@@ -41,11 +42,13 @@ export default function RootLayout({
         <AuthProvider>
           <MoodProvider>
             <PlayerProvider>
-              <PwaProvider>
-                <AppShell>
-                  {children}
-                </AppShell>
-              </PwaProvider>
+              <PlaylistProvider>
+                <PwaProvider>
+                  <AppShell>
+                    {children}
+                  </AppShell>
+                </PwaProvider>
+              </PlaylistProvider>
             </PlayerProvider>
           </MoodProvider>
         </AuthProvider>

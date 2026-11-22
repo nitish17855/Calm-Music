@@ -17,8 +17,10 @@ import {
   Eye,
   EyeOff,
   X,
+  ListPlus,
 } from 'lucide-react';
 import AudioVisualizerBars from '@/components/visuals/AudioVisualizerBars';
+import { usePlaylist } from '@/context/PlaylistContext';
 
 const QUICK_MOOD_PROMPTS = [
   'Chill Lo-Fi',
@@ -31,6 +33,7 @@ const QUICK_MOOD_PROMPTS = [
 export default function HeroSection() {
   const { config, mood } = useMood();
   const { currentTrack, isPlaying, playTrack, addToQueue, togglePlay } = usePlayer();
+  const { openAddToPlaylistModal } = usePlaylist();
 
   const [query, setQuery] = useState('');
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -215,7 +218,7 @@ export default function HeroSection() {
                 return (
                   <div
                     key={track.id}
-                    onClick={() => (isCurrent ? togglePlay() : playTrack(track, tracks))}
+                    onClick={() => (isCurrent ? togglePlay() : playTrack(track))}
                     className={`group p-2.5 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all ${
                       isCurrent
                         ? 'bg-white/15 text-white ring-1 ring-white/20'
@@ -282,6 +285,18 @@ export default function HeroSection() {
                         title={isLiked ? 'Unlike' : 'Save to Favorites'}
                       >
                         <Heart className={`w-4 h-4 ${isLiked ? 'fill-rose-500' : ''}`} />
+                      </button>
+
+                      {/* Add to Playlist Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAddToPlaylistModal(track);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-white/10 transition-colors"
+                        title="Add to Playlist"
+                      >
+                        <ListPlus className="w-4 h-4" />
                       </button>
 
                       {/* Add to Queue Button (Saved to localStorage) */}

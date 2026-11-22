@@ -6,6 +6,7 @@ import { useMood } from '@/context/MoodContext';
 import MoodBackground from '@/components/visuals/MoodBackground';
 import Navbar from '@/components/layout/Navbar';
 import PersistentPlayer from '@/components/player/PersistentPlayer';
+import AddToPlaylistModal from '@/components/playlist/AddToPlaylistModal';
 import { Eye, EyeOff, Compass } from 'lucide-react';
 
 interface ZenContextType {
@@ -104,6 +105,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Persistent Bottom Audio Player Bar remains accessible */}
       <PersistentPlayer />
+
+      {/* Global Add to Playlist Modal */}
+      <AddToPlaylistModal />
     </ZenContext.Provider>
   );
 }

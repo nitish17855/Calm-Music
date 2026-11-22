@@ -6,7 +6,7 @@ import { useMood, MOOD_CONFIGS } from '@/context/MoodContext';
 import { useZen } from '@/components/layout/AppShell';
 import { usePwa } from '@/components/pwa/PwaProvider';
 import { MoodMode } from '@/types';
-import { Moon, CloudRain, Compass, Heart, Car, Music, Eye, SlidersHorizontal, X, Download } from 'lucide-react';
+import { Moon, CloudRain, Compass, Heart, Car, Music, Eye, SlidersHorizontal, X, Download, ListMusic } from 'lucide-react';
 
 const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
   drive: <Car className="w-4 h-4" />,
@@ -71,6 +71,16 @@ export default function Navbar() {
                 <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">V</span>
               </button>
             )}
+
+            {/* Playlists Button */}
+            <Link
+              href="/library?tab=playlists"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium glass-pill text-indigo-300 hover:text-white border border-indigo-500/30 transition-all hover:bg-indigo-500/10"
+              title="View & Play Playlists"
+            >
+              <ListMusic className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Playlists</span>
+            </Link>
 
             {/* Scenic Mode / Zen View Toggle */}
             <button
@@ -156,6 +166,15 @@ export default function Navbar() {
               </button>
             )}
 
+            {/* Playlists Quick Link on Mobile */}
+            <Link
+              href="/library?tab=playlists"
+              className="p-1.5 rounded-xl text-indigo-300 glass-pill border border-indigo-500/30 text-xs flex items-center justify-center hover:text-white"
+              title="Playlists"
+            >
+              <ListMusic className="w-3.5 h-3.5 text-indigo-400" />
+            </Link>
+
             {/* Scenic View Toggle */}
             <button
               onClick={toggleZenMode}
@@ -210,6 +229,21 @@ export default function Navbar() {
                 <span>Install Calm Music (Home Screen App)</span>
               </button>
             )}
+
+            {/* Playlists in Mobile Drawer */}
+            <Link
+              href="/library?tab=playlists"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full mb-3 flex items-center justify-between p-3 rounded-2xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-xs font-semibold text-indigo-200 transition-all active:scale-95"
+            >
+              <span className="flex items-center gap-2">
+                <ListMusic className="w-4 h-4 text-indigo-400" />
+                <span>Sanctuary Playlists</span>
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">
+                View & Play
+              </span>
+            </Link>
 
             {/* Mood Environments Grid */}
             <div className="grid grid-cols-2 gap-2 mb-4">

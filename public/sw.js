@@ -1,5 +1,5 @@
 // Service Worker for Calm Music PWA
-const CACHE_NAME = 'calm-music-v4';
+const CACHE_NAME = 'calm-music-v5';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
@@ -35,6 +35,8 @@ self.addEventListener('fetch', (event) => {
   // Always bypass cache for APIs and media streaming
   if (
     event.request.url.includes('/api/') ||
+    event.request.url.includes('saavncdn.com') ||
+    event.request.url.includes('jiosaavn.com') ||
     event.request.url.includes('audius.co') ||
     event.request.url.includes('jamendo.com') ||
     event.request.url.includes('youtube.com') ||
