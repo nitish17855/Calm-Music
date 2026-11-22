@@ -68,68 +68,95 @@ function parseDuration(timeStr?: string): number {
   return 180;
 }
 
-// Search YouTube directly for any song
-export async function searchYouTube(query: string, limit = 12): Promise<Track[]> {
+// Helper to fetch and scrape YouTube results HTML
+async function fetchYouTubeScrape(queryStr: string, limit = 12): Promise<Track[]> {
   try {
-    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(queryStr)}`;
     const res = await fetch(url, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
+      signal: AbortSignal.timeout(6000),
       next: { revalidate: 1800 },
     });
 
     if (!res.ok) return [];
 
     const html = await res.text();
-    const match = html.match(/ytInitialData[ ]*=[ ]*({.+?});<\/script>/);
-    if (!match) return [];
+    const marker = 'ytInitialData = ';
+    const idx = html.indexOf(marker);
+    if (idx === -1) return [];
 
-    const data = JSON.parse(match[1]);
-    const contents =
-      data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]
-        ?.itemSectionRenderer?.contents;
+    const endIdx = html.indexOf(';</script>', idx);
+    const jsonStr = html.slice(idx + marker.length, endIdx !== -1 ? endIdx : undefined);
+    const data = JSON.parse(jsonStr);
 
-    if (!Array.isArray(contents)) return [];
+    const sectionList =
+      data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+
+    if (!Array.isArray(sectionList)) return [];
 
     const tracks: Track[] = [];
 
-    for (const item of contents) {
-      if (!item.videoRenderer) continue;
-      const vr = item.videoRenderer;
-      const videoId = vr.videoId;
-      if (!videoId) continue;
+    for (const section of sectionList) {
+      const contents = section.itemSectionRenderer?.contents;
+      if (!Array.isArray(contents)) continue;
 
-      const title = vr.title?.runs?.[0]?.text || 'Untitled Song';
-      const channel = vr.ownerText?.runs?.[0]?.text || 'YouTube Music';
-      const durationStr = vr.lengthText?.simpleText;
-      const duration = parseDuration(durationStr);
+      for (const item of contents) {
+        if (!item.videoRenderer) continue;
+        const vr = item.videoRenderer;
+        const videoId = vr.videoId;
+        if (!videoId) continue;
 
-      const thumb =
-        vr.thumbnail?.thumbnails?.[vr.thumbnail.thumbnails.length - 1]?.url ||
-        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        const title = vr.title?.runs?.[0]?.text || 'Untitled Song';
+        const channel = vr.ownerText?.runs?.[0]?.text || 'YouTube Music';
+        const durationStr = vr.lengthText?.simpleText;
+        const duration = parseDuration(durationStr);
 
-      tracks.push({
-        id: `yt-${videoId}`,
-        title,
-        artistName: channel,
-        albumName: 'YouTube Official Stream',
-        duration,
-        audioUrl: `https://www.youtube.com/watch?v=${videoId}`,
-        coverUrl: thumb,
-        source: 'youtube',
-        youtubeId: videoId,
-      });
+        const thumb =
+          vr.thumbnail?.thumbnails?.[vr.thumbnail.thumbnails.length - 1]?.url ||
+          `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
+        tracks.push({
+          id: `yt-${videoId}`,
+          title,
+          artistName: channel,
+          albumName: 'YouTube Official Stream',
+          duration,
+          audioUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          coverUrl: thumb,
+          source: 'youtube',
+          youtubeId: videoId,
+        });
+
+        if (tracks.length >= limit) break;
+      }
       if (tracks.length >= limit) break;
     }
 
     return tracks;
   } catch (err) {
-    console.error('YouTube search error:', err);
+    console.warn('YouTube scrape error:', err);
     return [];
   }
+}
+
+// Search YouTube directly with smart music fallback for age-gated/misclassified queries
+export async function searchYouTube(query: string, limit = 12): Promise<Track[]> {
+  const cleanQ = query.trim();
+  let tracks = await fetchYouTubeScrape(cleanQ, limit);
+
+  // If YouTube age-gated the raw phrase or returned empty, append "song" to classify as music
+  if (tracks.length === 0) {
+    const lower = cleanQ.toLowerCase();
+    if (!lower.includes('song') && !lower.includes('music') && !lower.includes('audio') && !lower.includes('track')) {
+      tracks = await fetchYouTubeScrape(`${cleanQ} song`, limit);
+    }
+  }
+
+  return tracks;
 }
 
 export async function searchJamendo(query: string, limit = 20): Promise<Track[]> {
@@ -142,7 +169,10 @@ export async function searchJamendo(query: string, limit = 20): Promise<Track[]>
     url.searchParams.set('audioformat', 'mp32');
     url.searchParams.set('include', 'musicinfo');
 
-    const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
+    const res = await fetch(url.toString(), {
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 3600 },
+    });
     if (!res.ok) return [];
 
     const data = await res.json();
@@ -159,7 +189,7 @@ export async function searchJamendo(query: string, limit = 20): Promise<Track[]>
       source: 'jamendo' as const,
     }));
   } catch (err) {
-    console.error('Error fetching from Jamendo:', err);
+    console.warn('Error fetching from Jamendo:', err);
     return [];
   }
 }
@@ -174,7 +204,10 @@ export async function getJamendoByTag(tags: string, limit = 20): Promise<Track[]
     url.searchParams.set('boost', 'popularity_total');
     url.searchParams.set('audioformat', 'mp32');
 
-    const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
+    const res = await fetch(url.toString(), {
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 3600 },
+    });
     if (!res.ok) return [];
 
     const data = await res.json();
@@ -201,7 +234,10 @@ export async function searchAudius(query: string, limit = 10): Promise<Track[]> 
       query
     )}&limit=${limit}&app_name=CALM_MUSIC`;
 
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 3600 },
+    });
     if (!res.ok) return [];
 
     const data = await res.json();

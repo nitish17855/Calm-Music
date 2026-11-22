@@ -22,13 +22,37 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   const [isBannerDismissed, setIsBannerDismissed] = useState<boolean>(false);
 
   useEffect(() => {
-    // 1. Register Service Worker for PWA
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .catch((err) => console.warn('Service worker registration note:', err));
-      });
+    if (typeof window !== 'undefined') {
+      // 1. Evict stale browser caches from old builds
+      if ('caches' in window) {
+        caches.keys().then((names) => {
+          names.forEach((name) => {
+            if (name !== 'calm-music-v2') {
+              caches.delete(name);
+            }
+          });
+        });
+      }
+
+      // 2. On localhost during development, unregister service workers to avoid stale cached chunks
+      const isLocalhost =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+      if (isLocalhost && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) {
+            reg.unregister();
+          }
+        });
+      } else if ('serviceWorker' in navigator) {
+        // Register Service Worker in production
+        window.addEventListener('load', () => {
+          navigator.serviceWorker
+            .register('/sw.js')
+            .catch((err) => console.warn('Service worker registration note:', err));
+        });
+      }
     }
 
     // 2. Check if already installed (standalone display mode)

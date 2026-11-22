@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { searchJamendo, getJamendoByTag, searchAudius, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
+import { searchJamendo, getJamendoByTag, searchAudius, searchYouTube, CURATED_AMBIENT_TRACKS } from '@/services/musicService';
 import { Track } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -13,12 +13,22 @@ export async function GET(request: Request) {
     let tracks: Track[] = [];
 
     if (query) {
-      // Search Audius & Jamendo in parallel for legal, high-quality audio streams
-      const [audiusTracks, jamendoTracks] = await Promise.all([
-        searchAudius(query, 16),
-        searchJamendo(query, 16),
+      // Search YouTube, Audius & Jamendo in parallel for rich multi-source music discovery
+      const [ytTracks, audiusTracks, jamendoTracks] = await Promise.all([
+        searchYouTube(query, 14).catch((err) => {
+          console.warn('YouTube search fallback:', err);
+          return [];
+        }),
+        searchAudius(query, 10).catch((err) => {
+          console.warn('Audius search fallback:', err);
+          return [];
+        }),
+        searchJamendo(query, 10).catch((err) => {
+          console.warn('Jamendo search fallback:', err);
+          return [];
+        }),
       ]);
-      tracks = [...audiusTracks, ...jamendoTracks];
+      tracks = [...ytTracks, ...audiusTracks, ...jamendoTracks];
     } else if (tag) {
       tracks = await getJamendoByTag(tag, 24);
     } else {
@@ -35,9 +45,6 @@ export async function GET(request: Request) {
             t.artistName.toLowerCase().includes(lowerQ) ||
             (t.albumName && t.albumName.toLowerCase().includes(lowerQ))
         );
-        if (tracks.length === 0) {
-          tracks = CURATED_AMBIENT_TRACKS;
-        }
       } else {
         tracks = CURATED_AMBIENT_TRACKS;
       }

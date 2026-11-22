@@ -30,7 +30,7 @@ const QUICK_MOOD_PROMPTS = [
 
 export default function HeroSection() {
   const { config, mood } = useMood();
-  const { currentTrack, isPlaying, playTrack, addToQueue } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, addToQueue, togglePlay } = usePlayer();
 
   const [query, setQuery] = useState('');
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -160,6 +160,26 @@ export default function HeroSection() {
       {/* ------------------------------------------------------------- */}
       {/* SEARCH RESULTS DROPDOWN / LIST (Clean, Fast & Non-Intrusive)  */}
       {/* ------------------------------------------------------------- */}
+      {loading && query && (
+        <div className="w-full max-w-2xl mt-3 relative z-20 flex items-center justify-center">
+          <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl glass-panel text-xs text-slate-300 shadow-xl border border-white/10">
+            <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+            <span>Searching YouTube, Audius & Jamendo...</span>
+          </div>
+        </div>
+      )}
+
+      {!loading && query && tracks.length === 0 && (
+        <div className="w-full max-w-2xl mt-3 relative z-20 text-center py-6 px-4 rounded-2xl glass-panel border border-white/10 shadow-2xl backdrop-blur-2xl">
+          <p className="text-sm text-slate-200 font-medium">
+            No soundscapes found for &ldquo;{query}&rdquo;
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Try checking the spelling or searching with artist name
+          </p>
+        </div>
+      )}
+
       {query && tracks.length > 0 && (
         <div className="w-full max-w-2xl mt-4 relative z-20 transition-all duration-300">
           
@@ -195,7 +215,7 @@ export default function HeroSection() {
                 return (
                   <div
                     key={track.id}
-                    onClick={() => playTrack(track, tracks)}
+                    onClick={() => (isCurrent ? togglePlay() : playTrack(track, tracks))}
                     className={`group p-2.5 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all ${
                       isCurrent
                         ? 'bg-white/15 text-white ring-1 ring-white/20'
