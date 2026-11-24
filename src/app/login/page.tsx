@@ -159,7 +159,10 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">Email Address</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-slate-300">Email Address</label>
+              <span className="text-[10px] text-emerald-400 font-mono font-medium">@nitjsr.ac.in preferred</span>
+            </div>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -167,10 +170,13 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="mindful@example.com"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black/30 border border-white/10 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-1 transition-all"
+                placeholder="e.g. 2022ugcs001@nitjsr.ac.in (or your email)"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black/30 border border-white/10 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400/50 transition-all"
               />
             </div>
+            <p className="text-[10px] text-indigo-300/80 mt-1.5 leading-relaxed">
+              💡 Organizational email is preferred (like <strong>@nitjsr.ac.in</strong>) to access campus jamming rooms & group listening.
+            </p>
           </div>
 
           <div>
@@ -242,6 +248,14 @@ export default function LoginPage() {
           </svg>
           <span>Continue with Google</span>
         </button>
+
+        {/* Permanent Session Reassurance */}
+        <div className="mt-5 pt-3 border-t border-white/10 text-center">
+          <p className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1.5">
+            <Lock className="w-3 h-3 text-emerald-400" />
+            <span>Permanent One-Time Login • Zero Session Expiry</span>
+          </p>
+        </div>
 
       </div>
     </div>

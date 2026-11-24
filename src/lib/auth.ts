@@ -9,6 +9,29 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: 'jwt',
+    // 10 Years: Permanent One-Time Login (No Session Expiry)
+    maxAge: 365 * 24 * 60 * 60 * 10,
+    updateAge: 24 * 60 * 60,
+  },
+  jwt: {
+    // 10 Years JWT Lifetime
+    maxAge: 365 * 24 * 60 * 60 * 10,
+  },
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === 'production'
+          ? '__Secure-next-auth.session-token'
+          : 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        // 10 Years cookie maxAge on client device
+        maxAge: 365 * 24 * 60 * 60 * 10,
+      },
+    },
   },
   pages: {
     signIn: '/login',

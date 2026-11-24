@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { usePlayer } from '@/context/PlayerContext';
 import { useMood } from '@/context/MoodContext';
 import { usePlaylist } from '@/context/PlaylistContext';
@@ -140,6 +140,32 @@ export default function LibraryPage() {
           <span>Create Playlist</span>
         </button>
       </div>
+
+      {/* Authenticated User Status Card */}
+      {status === 'authenticated' && session?.user && (
+        <div className="p-4 rounded-2xl glass-panel border border-emerald-500/20 mb-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300 bg-emerald-500/5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center text-sm border border-emerald-500/30">
+              {(session.user.name || session.user.email || 'U')[0].toUpperCase()}
+            </div>
+            <div>
+              <p className="font-semibold text-white">
+                {session.user.name || session.user.email}
+              </p>
+              <p className="text-[11px] text-emerald-400 font-mono">
+                {session.user.email} • Permanent Session Active (No Expiry)
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => signOut({ callbackUrl: '/' })}
+            className="text-xs text-slate-400 hover:text-rose-400 transition-colors px-3 py-1.5 rounded-xl hover:bg-rose-500/10 border border-white/5"
+            title="Log out of this device"
+          >
+            Sign Out
+          </button>
+        </div>
+      )}
 
       {/* Guest Notice (Subtle, Non-blocking) */}
       {status === 'unauthenticated' && (

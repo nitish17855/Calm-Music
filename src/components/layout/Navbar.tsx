@@ -2,11 +2,12 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useMood, MOOD_CONFIGS } from '@/context/MoodContext';
 import { useZen } from '@/components/layout/AppShell';
 import { usePwa } from '@/components/pwa/PwaProvider';
 import { MoodMode } from '@/types';
-import { Moon, CloudRain, Compass, Heart, Car, Music, Eye, SlidersHorizontal, X, Download, ListMusic } from 'lucide-react';
+import { Moon, CloudRain, Compass, Heart, Car, Music, Eye, SlidersHorizontal, X, Download, ListMusic, User } from 'lucide-react';
 
 const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
   drive: <Car className="w-4 h-4" />,
@@ -17,6 +18,7 @@ const MOOD_ICONS: Record<MoodMode, React.ReactNode> = {
 };
 
 export default function Navbar() {
+  const { data: session, status } = useSession();
   const { mood, setMood, config, drivePerspective, toggleDrivePerspective } = useMood();
   const { toggleZenMode } = useZen();
   const { isInstallable, isInstalled, installApp } = usePwa();
@@ -81,6 +83,31 @@ export default function Navbar() {
               <ListMusic className="w-3.5 h-3.5 text-indigo-400" />
               <span>Playlists</span>
             </Link>
+
+            {/* Account / Login Button */}
+            {status === 'authenticated' && session?.user ? (
+              <Link
+                href="/library"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold glass-pill text-emerald-300 hover:text-white border border-emerald-500/30 transition-all hover:bg-emerald-500/10"
+                title={`Permanent Session Active: ${session.user.name || session.user.email}`}
+              >
+                <div className="w-4 h-4 rounded-full bg-emerald-400/20 text-emerald-300 flex items-center justify-center text-[10px] font-bold">
+                  {(session.user.name || session.user.email || 'U')[0].toUpperCase()}
+                </div>
+                <span className="truncate max-w-[90px] hidden lg:inline">
+                  {session.user.name || session.user.email?.split('@')[0]}
+                </span>
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold glass-pill text-white hover:bg-white/10 border border-white/20 transition-all active:scale-95 shadow-sm"
+                title="Sign In / Register (Permanent One-Time Login)"
+              >
+                <User className="w-3.5 h-3.5 text-indigo-300" />
+                <span>Login</span>
+              </Link>
+            )}
 
             {/* Scenic Mode / Zen View Toggle */}
             <button
@@ -229,6 +256,38 @@ export default function Navbar() {
                 <span>Install Calm Music (Home Screen App)</span>
               </button>
             )}
+
+            {/* User Account / Login in Mobile Drawer */}
+            <Link
+              href={status === 'authenticated' ? '/library' : '/login'}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full mb-3 flex items-center justify-between p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-white transition-all active:scale-95"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-xl bg-white/10 flex items-center justify-center text-indigo-300 font-bold text-xs">
+                  {status === 'authenticated' && session?.user ? (
+                    (session.user.name || session.user.email || 'U')[0].toUpperCase()
+                  ) : (
+                    <User className="w-3.5 h-3.5 text-indigo-300" />
+                  )}
+                </div>
+                <div>
+                  <span className="block font-semibold">
+                    {status === 'authenticated' && session?.user
+                      ? session.user.name || session.user.email?.split('@')[0]
+                      : 'Sign In / Register'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    {status === 'authenticated'
+                      ? session?.user?.email || 'Permanent Session Active'
+                      : 'One-time login • No session expiry'}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300">
+                {status === 'authenticated' ? 'Profile' : 'Login'}
+              </span>
+            </Link>
 
             {/* Playlists in Mobile Drawer */}
             <Link
