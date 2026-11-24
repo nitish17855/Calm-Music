@@ -161,7 +161,7 @@ export default function LoginPage() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-medium text-slate-300">Email Address</label>
-              <span className="text-[10px] text-emerald-400 font-mono font-medium">@nitjsr.ac.in preferred</span>
+              <span className="text-[10px] text-emerald-400 font-mono font-medium">Organizational email is preferred</span>
             </div>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
